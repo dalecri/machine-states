@@ -68,7 +68,8 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
 /*
   HOW TO ADD A MACHINE
   --------------------
-  1. Add an entry to MACHINES below. The conveyor/sealer stubs are the starting point.
+  1. Add an entry to MACHINES below. stub(name) at the end of the machines section is the starting point;
+     press, conveyor and sealer are full examples (box() and cyl() draw iso solids).
   2. A machine only owns these:
        viewBox              SVG viewBox string (keep the same aspect if you want layouts to stay put)
        draw(pose, ctx)      returns SVG markup for ONE frame. Pure: no DOM, no timers.
@@ -77,7 +78,9 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
        poseAt(p, opts)      maps progress 0..1 to a pose object (any shape your draw() understands)
        staticPose(name,o)   poses for idle, done, error
        copy                 optional per-state { cap, sub, btn, action } text; falls back to GENERIC_COPY
-       phases               optional [{ name, end }] if your working states differ from lowering/pressing/lifting
+       phases               optional [{ name, end }] naming your working states (default lowering/pressing/lifting);
+                            the demo grid and state buttons build themselves from this list
+       pose.tremble         truthy keeps the frame loop alive for idle-time motion (needle shake, beam flicker)
   3. Leave alone: mountMachine, setState, setProgress, play, the rAF loop, the trail buffer,
      reduced-motion handling and the caption block. None of them know what a press is.
   Copy supports {file} {from} {to} {pct} placeholders, filled from the mount options.
@@ -109,9 +112,25 @@ function box(P,x0,y0,z0,w,d,h,v,o={}){
        + poly([P(x0,y0,z1),P(x1,y0,z1),P(x1,y1,z1),P(x0,y1,z1)],o.top||`var(${v})`,st);
 }
 
+const smooth = t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+function floorShadow(id,cx,cy,rx,ry){
+  return `<defs><radialGradient id="msh${id}"><stop offset="0" style="stop-color:var(--ink);stop-opacity:.2"/><stop offset=".7" style="stop-color:var(--ink);stop-opacity:.06"/><stop offset="1" style="stop-color:var(--ink);stop-opacity:0"/></radialGradient></defs>`+
+    `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#msh${id})"/>`;
+}
+/* the two-pixel confetti puff, shared by every machine's done pose */
+function puff(c,age){
+  if(!(age<700)||REDUCED) return '';
+  const t=age/700, cols=['--plate','--paper-accent','--ink'];
+  let s='';
+  for(let i=0;i<9;i++){
+    const a=-Math.PI*(.12+.76*i/8), d=8+28*easeOut(t);
+    s+=`<rect x="${f1(c[0]+Math.cos(a)*d)}" y="${f1(c[1]+Math.sin(a)*d*.75+12*t*t)}" width="2" height="2" style="fill:var(${cols[i%3]})" opacity="${(1-t).toFixed(2)}"/>`;
+  }
+  return s;
+}
+
 const DEFAULT_PHASES = [{name:'lowering',end:.3},{name:'pressing',end:.72},{name:'lifting',end:1}];
 const STATIC = new Set(['idle','done','error']);
-const WORKING = new Set(['lowering','pressing','lifting']);
 
 const GENERIC_COPY = {
   idle:    {cap:'Ready to start', sub:'{file}, {from}', btn:'Start', action:'start'},
@@ -162,8 +181,7 @@ MACHINES.press = {
 
   draw(p,ctx){
     const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark', id=ctx.uid;
-    let s=`<defs><radialGradient id="msh${id}"><stop offset="0" style="stop-color:var(--ink);stop-opacity:.2"/><stop offset=".7" style="stop-color:var(--ink);stop-opacity:.06"/><stop offset="1" style="stop-color:var(--ink);stop-opacity:0"/></radialGradient></defs>`;
-    s+=`<ellipse cx="${this.origin.cx}" cy="${this.origin.cy+2}" rx="130" ry="64" fill="url(#msh${id})"/>`;
+    let s=floorShadow(id,this.origin.cx,this.origin.cy+2,130,64);
     s+=box(P,-72,-14,0,16,28,g.slabZ,L);                       /* back pillar */
     s+=box(P,-52,-30,0,104,60,g.plinth,L,{top:lift(L,25)});      /* plinth */
     s+=this.stack(P,p.stackH);
@@ -227,16 +245,7 @@ MACHINES.press = {
     return s;
   },
 
-  confetti(P,ctx){
-    const age=ctx.doneAge; if(!(age<700)||REDUCED) return '';
-    const t=age/700, c=P(0,0,this.geo.plinth+this.geo.stackFlat+6), cols=['--plate','--paper-accent','--ink'];
-    let s='';
-    for(let i=0;i<9;i++){
-      const a=-Math.PI*(.12+.76*i/8), d=8+28*easeOut(t);
-      s+=`<rect x="${f1(c[0]+Math.cos(a)*d)}" y="${f1(c[1]+Math.sin(a)*d*.75+12*t*t)}" width="2" height="2" style="fill:var(${cols[i%3]})" opacity="${(1-t).toFixed(2)}"/>`;
-    }
-    return s;
-  }
+  confetti(P,ctx){ return puff(P(0,0,this.geo.plinth+this.geo.stackFlat+6), ctx.doneAge); }
 };
 
 /* stubs: right viewBox, empty group, the swap point is draw() */
@@ -245,8 +254,188 @@ function stub(name){
     poseAt:()=>({}), staticPose:()=>({}),
     draw:()=>`<g data-machine="${name}"><rect x="62" y="40" width="196" height="220" rx="14" style="fill:none;stroke:var(--muted);stroke-dasharray:4 5"/><text x="160" y="154" text-anchor="middle" class="m-stub">${name}: draw() goes here</text></g>`};
 }
-MACHINES.conveyor = stub('conveyor');
-MACHINES.sealer = stub('sealer');
+/* ---------- conveyor: uploads, sends, exports ---------- */
+MACHINES.conveyor = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:196},
+  geo:{beltZ:42, x0:-104, len:164, start:-76, end:44, edge:60, dockX:84, dockZ:30, hop:26, iw:30, id:26, ih:11, archZ:100},
+  phases:[{name:'loading',end:.22},{name:'moving',end:.8},{name:'unloading',end:1}],
+  copy:{
+    idle:     {cap:'Ready to upload', sub:'{file}, {from}', btn:'Upload', action:'start'},
+    loading:  {cap:'Loading the belt', sub:'Placing {file} on the line'},
+    moving:   {cap:'Sending it through', sub:'{from} on its way'},
+    unloading:{cap:'Dropping it off', sub:'Checking it arrived in one piece'},
+    done:     {cap:'Uploaded', sub:'{file} is safely on the server', btn:'Open', action:'next'},
+    error:    {cap:'Upload stalled', sub:'The connection dropped. {file} is still on your device.', btn:'Try again', action:'retry'}
+  },
+
+  poseAt(p,o){
+    const g=this.geo, base={ix:g.start, iz:g.beltZ, sq:0, belt:0, pct:0, tremble:false};
+    if(p<.22){                                   /* hop up, land with a wobble */
+      const t=p/.22;
+      if(t<.6) return Object.assign(base,{iz:g.beltZ+g.hop*Math.sin(Math.PI*t/.6)});
+      const b=(t-.6)/.4;
+      return Object.assign(base,{sq:Math.exp(-5*b)*Math.cos(11*b), tremble:true});
+    }
+    if(p<.8){                                    /* ride the belt, belt moves with it */
+      const e=smooth((p-.22)/.58), ix=g.start+(g.end-g.start)*e;
+      return Object.assign(base,{ix, belt:ix-g.start, pct:e*100, tremble:true});
+    }
+    const t=clamp((p-.8)/.2), ix=g.end+(g.dockX-g.end)*easeOut(t), off=clamp((ix-g.edge)/18);
+    return Object.assign(base,{ix, iz:g.beltZ-(g.beltZ-g.dockZ)*easeIn(off), belt:Math.min(ix,g.edge)-g.start,
+      pct:100, sq:.35*Math.sin(Math.PI*clamp((t-.7)/.3)), tremble:t<.5});
+  },
+  staticPose(name,o){
+    if(name==='done')  return Object.assign(this.poseAt(1,o),{tremble:false});
+    if(name==='error') return Object.assign(this.poseAt(.22+.58*.47,o),{tremble:false,error:true});
+    return this.poseAt(0,o);
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark';
+    const onDock = p.ix+g.iw/2 > g.edge+2;
+    let s=floorShadow(ctx.uid,this.origin.cx,this.origin.cy+4,136,66);
+    for(const lx of [-96,50]) for(const ly of [-22,16]) s+=box(P,lx,ly,0,6,6,30,L);
+    s+=box(P,g.x0,-24,30,g.len,48,12,L,{top:`var(${D})`});                       /* frame, belt on top */
+    const run=g.len-6;
+    for(let k=0;k<10;k++){                                                       /* treads move with the item */
+      const x=g.x0+3+(((k*run/10+p.belt)%run)+run)%run;
+      s+=`<polyline points="${pts([P(x,-22,g.beltZ),P(x,22,g.beltZ)])}" style="fill:none;stroke:${lift(D,30)};stroke-width:1.4"/>`;
+    }
+    s+=box(P,-6,-34,0,12,6,g.archZ,L);                                           /* back post */
+    const beam=()=>{
+      const live=p.tremble&&!REDUCED, near=clamp(1-Math.abs(p.ix)/26), flick=live?.04*Math.sin(ctx.now/37):0;
+      let b=`<polygon points="${pts([P(0,-28,g.beltZ),P(0,28,g.beltZ),P(0,28,g.archZ),P(0,-28,g.archZ)])}" style="fill:var(${p.error?'--accent':'--plate'});stroke:none" opacity="${(p.error?.28:.14+.22*near+flick).toFixed(2)}"/>`;
+      if(live){ const z=g.beltZ+((ctx.now/9)%(g.archZ-g.beltZ));
+        b+=`<polyline points="${pts([P(0,-28,z),P(0,28,z)])}" style="fill:none;stroke:var(--plate);stroke-width:1.2" opacity=".7"/>`; }
+      return b;
+    };
+    if(p.ix<0) s+=this.item(P,p,ctx)+beam();
+    else { s+=beam(); if(!onDock) s+=this.item(P,p,ctx); }
+    s+=box(P,-6,28,0,12,6,g.archZ,L);                                            /* front post */
+    s+=box(P,-8,-36,g.archZ,16,72,12,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    const r=P(8,0,g.archZ+6);
+    s+=`<rect x="${f1(r[0]-17)}" y="${f1(r[1]-6)}" width="34" height="12" rx="3" style="fill:var(--machine-dark);stroke:${p.error?'var(--accent)':lift(D,25)};stroke-width:${p.error?1.6:1}"/>`+
+       `<text x="${f1(r[0])}" y="${f1(r[1]+2.6)}" text-anchor="middle" class="m-read">${p.error?'--':Math.round(p.pct)+'%'}</text>`;
+    s+=box(P,64,-26,0,40,52,g.dockZ,L,{top:'var(--plate)'});                    /* dock */
+    if(onDock) s+=this.item(P,p,ctx);
+    return s+this.item(P,p,ctx,true)+puff(P(g.dockX,0,g.dockZ+g.ih+4), ctx.doneAge);
+  },
+
+  /* the file: a paper block with a pink label, plus its size tag; trails copy both */
+  item(P,p,ctx,tagOnly){
+    const g=this.geo;
+    const part=(q,op,label)=>{
+      const w=g.iw*(1+.12*q.sq), h=g.ih*(1-.3*q.sq), x0=q.ix-w/2, y0=-g.id/2, top=q.iz+h, a=P(q.ix,0,top+16);
+      let s='';
+      if(tagOnly) s+=`<g transform="translate(${f1(a[0])} ${f1(a[1])})"><rect x="-25" y="-9" width="50" height="18" rx="9" style="fill:var(--paper-accent);stroke:${shade('--paper-accent',28)}"/>`+
+         (label?`<text x="0" y="3" text-anchor="middle" class="m-tag">${label}</text>`:'')+`</g>`;
+      else s+=box(P,x0,y0,q.iz,w,g.id,h,'--paper',{front:shade('--paper',5),side:shade('--paper',11),stroke:shade('--machine-light',35)})+poly([P(x0+4,y0+3,top),P(x0+10,y0+3,top),P(x0+10,y0+g.id-3,top),P(x0+4,y0+g.id-3,top)],'var(--paper-accent)',shade('--paper-accent',25));
+      return op<1?`<g opacity="${op}">${s}</g>`:s;
+    };
+    let s='';
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.ix-p.ix)+Math.abs(t.iz-p.iz)>.8) s+=part(t,i?.1:.22,'');
+    }
+    return s+part(p,1,fmt(ctx.opts.fromSize));
+  }
+};
+/* ---------- sealer: saving ---------- */
+/* vertical iso cylinder: body with a rounded bottom, then the top ellipse */
+function cyl(P,x,y,z0,h,r,v,o={}){
+  const b=P(x,y,z0), t=P(x,y,z0+h), rx=1.2247*r, ry=.7071*r, st=o.stroke||shade(v,o.dark?45:32);
+  return `<path d="M${f1(t[0]-rx)} ${f1(t[1])} L${f1(b[0]-rx)} ${f1(b[1])} A${f1(rx)} ${f1(ry)} 0 0 0 ${f1(b[0]+rx)} ${f1(b[1])} L${f1(t[0]+rx)} ${f1(t[1])} Z" style="fill:${o.side||shade(v,12)};stroke:${st}"/>`+
+    `<ellipse cx="${f1(t[0])}" cy="${f1(t[1])}" rx="${f1(rx)}" ry="${f1(ry)}" style="fill:${o.top||`var(${v})`};stroke:${st}"/>`;
+}
+MACHINES.sealer = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:186},
+  geo:{padZ:12, envZ:16, up:62, contact:17.5, flapL:38, flapOpen:105, wax:11, sealY:-5},
+  phases:[{name:'folding',end:.28},{name:'stamping',end:.72},{name:'setting',end:1}],
+  copy:{
+    idle:    {cap:'Unsaved changes', sub:'{file} has edits since your last save', btn:'Save', action:'start'},
+    folding: {cap:'Tucking it in', sub:'Folding {file} closed'},
+    stamping:{cap:'Sealing it', sub:'Pressing your changes into {file}'},
+    setting: {cap:'Letting it set', sub:'Writing {to} to disk'},
+    done:    {cap:'Saved', sub:'{file} is sealed and up to date', btn:'Done', action:'next'},
+    error:   {cap:'Couldn’t save', sub:'The disk is full. Your edits are still open.', btn:'Try again', action:'retry'}
+  },
+
+  poseAt(p,o){
+    const g=this.geo, base={flap:g.flapOpen, hb:g.up, squash:0, wax:0, seg:p, tremble:false};
+    if(p<.28){                                   /* flap falls shut, small bounce */
+      const t=p/.28, b=(t-.75)/.25;
+      return Object.assign(base,{flap: t<.75 ? g.flapOpen*(1-easeIn(t/.75)) : 10*Math.sin(Math.PI*b)*(1-b)});
+    }
+    if(p<.72){                                   /* stamp drops, squashes, wax spreads */
+      const t=(p-.28)/.44;
+      if(t<.4) return Object.assign(base,{flap:0, hb:g.up-(g.up-g.contact)*easeIn(t/.4), tremble:t>.2});
+      const b=(t-.4)/.6;
+      return Object.assign(base,{flap:0, hb:g.contact, squash:Math.exp(-6*b)*Math.cos(13*b), wax:g.wax*spring(b), tremble:true});
+    }
+    const t=clamp((p-.72)/.28);
+    return Object.assign(base,{flap:0, hb:g.contact+(g.up-g.contact)*easeOut(t), wax:g.wax, tremble:t<.4});
+  },
+  staticPose(name,o){
+    if(name==='done')  return Object.assign(this.poseAt(1,o),{tremble:false, seg:1});
+    if(name==='error') return Object.assign(this.poseAt(.28+.44*.2,o),{tremble:false, error:true});
+    return this.poseAt(0,o);
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark';
+    const jit=p.tremble&&!REDUCED ? Math.sin(ctx.now/23)*.7 : 0;
+    let s=floorShadow(ctx.uid,this.origin.cx,this.origin.cy+4,132,68);
+    s+=box(P,-70,-50,0,140,100,g.padZ,L,{top:lift(L,25)});                            /* pad */
+    s+=box(P,-50,-32,g.padZ,100,64,g.envZ-g.padZ,'--paper',{front:shade('--paper',5),side:shade('--paper',11),stroke:shade(L,35)});
+    s+=`<polyline points="${pts([P(-50,32,g.envZ),P(0,-2,g.envZ),P(50,32,g.envZ)])}" style="fill:none;stroke:${shade(L,25)}"/>`;
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.flap-p.flap)>2) s+=`<g opacity="${i?.1:.22}">${this.flap(P,t.flap)}</g>`;
+    }
+    s+=this.flap(P,p.flap);
+    if(p.wax>.3) s+=this.seal(P,p.wax);
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.hb-p.hb)>.8) s+=`<g opacity="${i?.1:.22}">${this.stamp(P,Object.assign({},t,{squash:0}),0)}</g>`;
+    }
+    s+=this.stamp(P,p,jit);
+    s+=box(P,54,g.sealY-6,g.padZ,12,12,96,L);                                          /* post, arm rides on it */
+    s+=box(P,52,g.sealY-8,g.padZ+96,16,16,6,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    s+=this.meter(P,p);
+    return s+puff(P(0,g.sealY,g.envZ+6), ctx.doneAge);
+  },
+
+  flap(P,deg){
+    const g=this.geo, a=deg*Math.PI/180, z=g.envZ+.3, l=P(-50,-32,z), r=P(50,-32,z),
+      apex=P(0,-32+g.flapL*Math.cos(a), z+g.flapL*Math.sin(a));
+    return poly([l,r,apex], shade('--paper', deg>90?7:deg>20?4:0), shade('--machine-light',35))+
+      `<polyline points="${pts([l,apex,r])}" style="fill:none;stroke:var(--paper-accent);stroke-width:1.4"/>`;
+  },
+  seal(P,r){
+    const c=P(0,this.geo.sealY,this.geo.envZ+.6), e=(k,st)=>`<ellipse cx="${f1(c[0])}" cy="${f1(c[1])}" rx="${f1(1.2247*r*k)}" ry="${f1(.7071*r*k)}" style="${st}"/>`;
+    return e(1,`fill:var(--paper-accent);stroke:${shade('--paper-accent',30)}`)+e(.58,`fill:none;stroke:${shade('--paper-accent',22)};stroke-width:.8`);
+  },
+  /* collar, knob and arm move together; the arm slides on the post */
+  stamp(P,q,x){
+    const g=this.geo, L='--machine-light', D='--machine-dark', ch=6*(1-.4*(q.squash||0)), k0=q.hb+ch, kTop=k0+22;
+    return cyl(P,x,g.sealY,q.hb,ch,12,'--plate',{top:lift('--plate',18)})
+      + cyl(P,x,g.sealY,k0,22,7,D,{dark:true,side:`var(${D})`,top:lift(D,16)})
+      + box(P,x,g.sealY-4,kTop-8,54-x,8,8,L)
+      + cyl(P,x,g.sealY,kTop-.5,1,7,D,{dark:true,top:lift(D,16)});
+  },
+  /* five-segment progress strip on the post's outer face */
+  meter(P,p){
+    let s='';
+    for(let i=0;i<5;i++){
+      const z0=this.geo.padZ+22+i*12, y0=this.geo.sealY-3, face=[P(66,y0-.5-3,z0),P(66,y0+3.5,z0),P(66,y0+3.5,z0+8),P(66,y0-.5-3,z0+8)], lit=clamp(p.seg*5-i);
+      s+=poly(face,shade('--machine-light',28),shade('--machine-light',45));
+      if(lit>0) s+=`<polygon points="${pts(face)}" style="fill:var(${p.error?'--accent':'--plate'});stroke:none" opacity="${lit.toFixed(2)}"/>`;
+    }
+    return s;
+  }
+};
 
 /* ---------- core (machine-agnostic) ---------- */
 function mountMachine(el, options){
@@ -286,13 +475,14 @@ function mountMachine(el, options){
   }
   function loop(now){
     raf=0;
+    if(!el.isConnected) return;
     if(playing){
       const p=clamp((now-t0)/o.duration);
       if(p>=1){ playing=false; api.setState('done'); if(resolvePlay){resolvePlay(api); resolvePlay=null;} return; }
       applyProgress(p);
     }
     render(now);
-    const busy = playing || (WORKING.has(state)&&pose&&pose.tremble&&!REDUCED) || now-doneAt<720 || now-lastChange<200;
+    const busy = playing || (phases().some(ph=>ph.name===state)&&pose&&pose.tremble&&!REDUCED) || now-doneAt<720 || now-lastChange<200;
     if(busy) raf=requestAnimationFrame(loop);
   }
   const kick = ()=>{ if(!raf) raf=requestAnimationFrame(loop); };
@@ -358,7 +548,6 @@ function single(){
 
 function demo(){
   app.className='demo';
-  const names=['idle','lowering','pressing','lifting','done','error'];
   app.innerHTML=
     '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side.</p>'+NAV+
     '<div class="controls">'+
@@ -366,20 +555,25 @@ function demo(){
       '<label class="grow">Progress <input type="range" id="prog" min="0" max="1000" value="0"></label>'+
       '<button class="chip" id="play" type="button">Play loop</button>'+
       '<button class="chip" id="dark" type="button" aria-pressed="false">Quiet Pixel dark</button>'+
-    '</div>'+
-    '<div class="states">'+names.map(n=>`<button class="chip" type="button" data-s="${n}">${n}</button>`).join('')+'</div>'+
-    '<section class="hero"><div id="live"></div></section>'+
-    '<section class="grid">'+names.map(n=>`<figure><figcaption>${n}</figcaption><div data-cell="${n}"></div></figure>`).join('')+'</section>';
+    '</div><div class="states" id="states"></div>'+
+    '<section class="hero"><div id="live"></div></section><section class="grid" id="grid"></section>';
 
   const live = mountMachine(document.getElementById('live'), DEMO_FILE);
-  const cells = names.map(n=>mountMachine(app.querySelector(`[data-cell="${n}"]`), Object.assign({onAction:()=>{}}, DEMO_FILE)).setState(n));
-  const all = [live, ...cells];
+  const $ = id=>document.getElementById(id);
+  const statesFor = name=>['idle', ...(MACHINES[name].phases||DEFAULT_PHASES).map(ph=>ph.name), 'done', 'error'];
+  function build(name){
+    const names=statesFor(name);
+    $('states').innerHTML = names.map(n=>`<button class="chip" type="button" data-s="${n}">${n}</button>`).join('');
+    $('states').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>live.setState(b.dataset.s));
+    $('grid').innerHTML = names.map(n=>`<figure><figcaption>${n}</figcaption><div data-cell="${n}"></div></figure>`).join('');
+    names.forEach(n=>mountMachine($('grid').querySelector(`[data-cell="${n}"]`), Object.assign({machine:name, onAction:()=>{}}, DEMO_FILE)).setState(n));
+  }
+  build('press');
 
-  document.getElementById('pick').onchange = e=>{ all.forEach(m=>m.setMachine(e.target.value)); cells.forEach((m,i)=>m.setState(names[i])); };
-  document.getElementById('prog').oninput = e=>live.setProgress(e.target.value/1000);
-  document.getElementById('play').onclick = ()=>{ document.getElementById('prog').value=0; live.play(); };
-  app.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>live.setState(b.dataset.s));
-  document.getElementById('dark').onclick = e=>{
+  $('pick').onchange = e=>{ live.setMachine(e.target.value); $('prog').value=0; build(e.target.value); };
+  $('prog').oninput = e=>live.setProgress(e.target.value/1000);
+  $('play').onclick = ()=>{ $('prog').value=0; live.play(); };
+  $('dark').onclick = e=>{
     const on=document.body.classList.toggle('qp-dark');
     e.target.classList.toggle('on',on); e.target.setAttribute('aria-pressed',on);
   };
