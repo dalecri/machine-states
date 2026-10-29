@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Machine States</title>
+<style>
+:root{
+  --machine-dark:#26262b; --machine-light:#d9d7e2; --plate:#adbcf5;
+  --paper:#ffffff; --paper-accent:#f2b8c6; --accent:#26262b;
+  --ground:#ffffff; --ink:#26262b; --muted:#8a8896;
+}
+body.qp-dark{
+  --machine-dark:#101014; --machine-light:#3a3a44; --plate:#8f9fe6;
+  --paper:#ecebf2; --paper-accent:#e79ab0; --accent:#adbcf5;
+  --ground:#17171b; --ink:#ecebf2; --muted:#8d8b99;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono",ui-monospace,Menlo,Consolas,monospace;transition:background .2s}
+
+/* component */
+.machine{width:100%;max-width:480px;min-width:160px;margin:0 auto;text-align:center;color:var(--ink);font-family:inherit}
+.machine svg{display:block;width:100%;height:auto;overflow:visible}
+.machine polygon,.machine polyline,.machine line,.machine path{stroke-width:1;stroke-linejoin:round;stroke-linecap:round}
+.machine-text{padding:4px 12px 0}
+.machine-cap{margin:2px 0 3px;font-weight:700;font-size:15px;line-height:1.3}
+.machine-sub{margin:0;font-size:12px;color:var(--muted);line-height:1.45;min-height:1.45em}
+.machine-actions{min-height:46px;display:flex;justify-content:center;align-items:center;margin-top:10px}
+.machine-btn{font:inherit;font-size:13px;font-weight:700;background:var(--accent);color:var(--ground);border:0;border-radius:999px;padding:9px 24px;cursor:pointer;transition:transform .12s}
+.machine-btn:active{transform:scale(.96)}
+.machine-btn:focus-visible{outline:2px solid var(--plate);outline-offset:3px}
+.machine-btn[hidden]{display:none}
+.m-tag{font-size:8px;font-weight:700;fill:var(--machine-dark)}
+.m-read{font-size:7px;font-weight:700;fill:var(--paper);letter-spacing:.3px}
+.m-stub{font-size:10px;fill:var(--muted)}
+
+/* page + demo */
+.single{padding:48px 16px}
+.single .stage{max-width:340px;margin:0 auto}
+.hint{text-align:center;margin-top:28px}
+.link{font:inherit;font-size:12px;color:var(--muted);background:none;border:0;text-decoration:underline;cursor:pointer}
+.demo{max-width:1040px;margin:0 auto;padding:28px 16px 64px}
+.demo h1{font-size:20px;margin:0 0 4px}
+.demo .muted{color:var(--muted);font-size:12px;margin:0 0 20px}
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;font-size:12px;margin-bottom:14px}
+.controls label{display:flex;gap:8px;align-items:center}
+.controls .grow{flex:1;min-width:200px}
+.controls .grow input{flex:1}
+.controls select,.chip{font:inherit;font-size:12px;color:var(--ink);background:transparent;border:1px solid var(--muted);border-radius:999px;padding:5px 12px;cursor:pointer}
+.chip.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.states{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.hero{border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:16px;padding:24px 16px;margin-bottom:28px}
+.hero .machine{max-width:380px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.grid figure{margin:0;border:1px solid color-mix(in srgb,var(--muted) 25%,transparent);border-radius:14px;padding:12px 8px 8px}
+.grid figcaption{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 4px 6px}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+/*
+  HOW TO ADD A MACHINE
+  --------------------
+  1. Add an entry to MACHINES below. The conveyor/sealer stubs are the starting point.
+  2. A machine only owns these:
+       viewBox              SVG viewBox string (keep the same aspect if you want layouts to stay put)
+       draw(pose, ctx)      returns SVG markup for ONE frame. Pure: no DOM, no timers.
+                            ctx = { uid, opts, now, trail, doneAge }
+                            trail = last two sampled poses; draw low-opacity copies of moving parts from it.
+       poseAt(p, opts)      maps progress 0..1 to a pose object (any shape your draw() understands)
+       staticPose(name,o)   poses for idle, done, error
+       copy                 optional per-state { cap, sub, btn, action } text; falls back to GENERIC_COPY
+       phases               optional [{ name, end }] if your working states differ from lowering/pressing/lifting
+  3. Leave alone: mountMachine, setState, setProgress, play, the rAF loop, the trail buffer,
+     reduced-motion handling and the caption block. None of them know what a press is.
+  Copy supports {file} {from} {to} {pct} placeholders, filled from the mount options.
+*/
+(function(){
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C30 = Math.cos(Math.PI/6), S30 = 0.5;
+let UID = 0;
+
+/* ---------- helpers ---------- */
+const clamp = (v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+const easeIn = t=>t*t*t;
+const easeOut = t=>1-Math.pow(1-t,3);
+const backOut = t=>1+2.70158*Math.pow(t-1,3)+1.70158*Math.pow(t-1,2);
+const spring = t=>1-Math.exp(-7*t)*Math.cos(14*t);      /* the squash: ~20% overshoot, settles */
+const fmt = n=>(Math.round(n*10)/10).toFixed(1)+' MB';
+const f1 = n=>n.toFixed(1);
+const pts = a=>a.map(p=>f1(p[0])+','+f1(p[1])).join(' ');
+const shade = (v,a)=>`color-mix(in srgb,var(${v}) ${100-a}%,#000)`;
+const lift  = (v,a)=>`color-mix(in srgb,var(${v}) ${100-a}%,#fff)`;
+const isoFn = o=>(x,y,z)=>[o.cx+(x-y)*C30, o.cy+(x+y)*S30-z];
+
+function poly(p,fill,stroke){return `<polygon points="${pts(p)}" style="fill:${fill};stroke:${stroke}"/>`;}
+/* axis-aligned iso box; returns +y face, +x face, top face (the three visible ones) */
+function box(P,x0,y0,z0,w,d,h,v,o={}){
+  const x1=x0+w,y1=y0+d,z1=z0+h, st=o.stroke||shade(v,o.dark?45:32);
+  return poly([P(x0,y1,z0),P(x1,y1,z0),P(x1,y1,z1),P(x0,y1,z1)],o.front||shade(v,7),st)
+       + poly([P(x1,y0,z0),P(x1,y1,z0),P(x1,y1,z1),P(x1,y0,z1)],o.side||shade(v,16),st)
+       + poly([P(x0,y0,z1),P(x1,y0,z1),P(x1,y1,z1),P(x0,y1,z1)],o.top||`var(${v})`,st);
+}
+
+const DEFAULT_PHASES = [{name:'lowering',end:.3},{name:'pressing',end:.72},{name:'lifting',end:1}];
+const STATIC = new Set(['idle','done','error']);
+const WORKING = new Set(['lowering','pressing','lifting']);
+
+const GENERIC_COPY = {
+  idle:    {cap:'Ready to start', sub:'{file}, {from}', btn:'Start', action:'start'},
+  lowering:{cap:'Warming up', sub:'Lining up {file}'},
+  pressing:{cap:'Working on it', sub:'{from} going in'},
+  lifting: {cap:'Wrapping up', sub:'Almost there'},
+  done:    {cap:'All done', sub:'{file} is now {to}', btn:'Download', action:'next'},
+  error:   {cap:'Something went wrong', sub:'{file} was not changed', btn:'Try again', action:'retry'}
+};
+
+/* ---------- machines ---------- */
+const MACHINES = {};
+
+MACHINES.press = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:232},
+  geo:{plinth:14, stackFull:52, stackFlat:12, plateT:12, plateUp:118, slabZ:150},
+  copy:{
+    idle:    {cap:'Too big to send', sub:'{file} is {from}', btn:'Compress', action:'start'},
+    lowering:{cap:'Lowering the press', sub:'Lining up every page of {file}'},
+    pressing:{cap:'Pressing it flat', sub:'Squeezing {from} down to size'},
+    lifting: {cap:'Lifting the press', sub:'Pressed flat at {to}'},
+    done:    {cap:'Down to {to}', sub:'{file} is {pct} smaller and ready to go', btn:'Send', action:'next'},
+    error:   {cap:'Couldn\u2019t compress this file', sub:'{file} may be password protected. Nothing was changed.', btn:'Try again', action:'retry'}
+  },
+  maxFor:o=>Math.max(1,Math.ceil(o.fromSize*1.2)),
+
+  poseAt(p,o){
+    const g=this.geo, full=g.plinth+g.stackFull, flat=g.stackFlat;
+    if(p<.3){
+      const e=easeIn(p/.3);
+      return {plateZ:g.plateUp-(g.plateUp-full)*e, stackH:g.stackFull, size:o.fromSize, tremble:p>.12, tag:null};
+    }
+    if(p<.72){
+      const t=(p-.3)/.42, h=g.stackFull-(g.stackFull-flat)*spring(t), k=clamp(t/.3);
+      return {plateZ:g.plinth+h, stackH:h, tremble:true,
+        size:o.fromSize-(o.fromSize-o.toSize)*easeOut(clamp(t/.85)),
+        tag:{dx:24*backOut(k), scale:Math.max(0,backOut(k))}};
+    }
+    const t=clamp((p-.72)/.28), low=g.plinth+flat;
+    return {plateZ:low+(g.plateUp-low)*easeOut(t), stackH:flat, size:o.toSize, tremble:t<.6, tag:{dx:24,scale:1}};
+  },
+  staticPose(name,o){
+    if(name==='done')  return Object.assign(this.poseAt(1,o),{tremble:false});
+    if(name==='error') return Object.assign(this.poseAt(.17,o),{size:0,tremble:false,error:true});
+    return this.poseAt(0,o);
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark', id=ctx.uid;
+    let s=`<defs><radialGradient id="msh${id}"><stop offset="0" style="stop-color:var(--ink);stop-opacity:.2"/><stop offset=".7" style="stop-color:var(--ink);stop-opacity:.06"/><stop offset="1" style="stop-color:var(--ink);stop-opacity:0"/></radialGradient></defs>`;
+    s+=`<ellipse cx="${this.origin.cx}" cy="${this.origin.cy+2}" rx="130" ry="64" fill="url(#msh${id})"/>`;
+    s+=box(P,-72,-14,0,16,28,g.slabZ,L);                       /* back pillar */
+    s+=box(P,-52,-30,0,104,60,g.plinth,L,{top:lift(L,25)});      /* plinth */
+    s+=this.stack(P,p.stackH);
+    /* plate fade trail: older copy first, lowest opacity */
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.plateZ-p.plateZ)>.8) s+=`<g opacity="${i?.1:.22}">${box(P,-54,-28,t.plateZ,108,56,g.plateT,'--plate')}</g>`;
+    }
+    const top=p.plateZ+g.plateT;
+    if(g.slabZ-top>.5) s+=box(P,-7,-7,top,14,14,g.slabZ-top,L);  /* piston rod */
+    s+=box(P,-54,-28,p.plateZ,108,56,g.plateT,'--plate',{top:lift('--plate',18)});
+    s+=box(P,56,-14,0,16,28,g.slabZ,L);                        /* front pillar */
+    s+=box(P,-76,-32,g.slabZ,152,64,16,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    s+=this.tag(P,p,ctx)+this.gauge(P,p,ctx)+this.confetti(P,ctx);
+    return s;
+  },
+
+  stack(P,h){
+    const z0=this.geo.plinth, line=shade('--machine-light',30);
+    let s=box(P,-40,-24,z0,80,48,h,'--paper',{front:shade('--paper',4),side:shade('--paper',9),stroke:line});
+    const n=Math.max(2,Math.round(h/5));
+    for(let i=1;i<n;i++){
+      const z=z0+h*i/n, pink=i%3===0;
+      s+=`<polyline points="${pts([P(-40,24,z),P(40,24,z),P(40,-24,z)])}" style="fill:none;stroke:${pink?'var(--paper-accent)':line};stroke-width:${pink?1.6:.6}"/>`;
+    }
+    return s;
+  },
+
+  tag(P,p,ctx){
+    if(!p.tag) return '';
+    const g=this.geo;
+    const one=(q,op,label)=>{
+      const a=P(-40,24,g.plinth+q.stackH*.5);
+      return `<g transform="translate(${f1(a[0]-q.tag.dx-8)} ${f1(a[1])}) scale(${q.tag.scale.toFixed(3)})" opacity="${op}">`+
+        `<rect x="-25" y="-9" width="50" height="18" rx="9" style="fill:var(--paper-accent);stroke:${shade('--paper-accent',28)}"/>`+
+        (label?`<text x="0" y="3" text-anchor="middle" class="m-tag">${label}</text>`:'')+`</g>`;
+    };
+    let s='';
+    ctx.trail.forEach((t,i)=>{ if(t.tag && Math.abs(t.tag.dx-p.tag.dx)+Math.abs(t.stackH-p.stackH)>.8) s=one(t,i?.1:.25,'')+s; });
+    return s+one(p,1,fmt(p.size));
+  },
+
+  gauge(P,p,ctx){
+    const m=P(72,0,88), cx=m[0]+18, cy=m[1]-6, r=24, max=this.maxFor(ctx.opts);
+    const ang=q=>-120+240*clamp(q.size/max);
+    const jit=p.tremble&&!REDUCED ? Math.sin(ctx.now/41)*1.8+Math.sin(ctx.now/17)*1.1 : 0;
+    const needle=(a,op)=>{const rad=a*Math.PI/180;
+      return `<line x1="${f1(cx)}" y1="${f1(cy)}" x2="${f1(cx+Math.sin(rad)*17)}" y2="${f1(cy-Math.cos(rad)*17)}" style="stroke:var(--machine-dark);stroke-width:1.8" opacity="${op}"/>`;};
+    let s=`<path d="M${f1(m[0]-2)} ${f1(m[1]-2)} L${f1(cx)} ${f1(cy)}" style="stroke:var(--machine-dark);stroke-width:5"/>`;
+    s+=`<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${r}" style="fill:var(--paper);stroke:var(--machine-dark);stroke-width:2.6"/>`;
+    if(p.error) s+=`<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${r-1.5}" style="fill:var(--accent)" opacity=".18"/>`;
+    for(let k=0;k<=8;k++){
+      const rad=(-120+k*30)*Math.PI/180, r0=k%2?r-6:r-8, r1=r-3.5;
+      s+=`<line x1="${f1(cx+Math.sin(rad)*r0)}" y1="${f1(cy-Math.cos(rad)*r0)}" x2="${f1(cx+Math.sin(rad)*r1)}" y2="${f1(cy-Math.cos(rad)*r1)}" style="stroke:var(--muted);stroke-width:${k%2?.8:1.3}"/>`;
+    }
+    ctx.trail.slice().reverse().forEach((t,i,arr)=>{ if(Math.abs(ang(t)-ang(p))>1.5) s+=needle(ang(t), i===arr.length-1?.25:.1); });
+    s+=needle(ang(p)+jit,1);
+    s+=`<circle cx="${f1(cx)}" cy="${f1(cy)}" r="2.6" style="fill:var(--machine-dark)"/>`;
+    s+=`<rect x="${f1(cx-16)}" y="${f1(cy+7)}" width="32" height="10" rx="3" style="fill:var(--machine-dark)"/>`;
+    s+=`<text x="${f1(cx)}" y="${f1(cy+14.4)}" text-anchor="middle" class="m-read">${p.error?'-- MB':fmt(p.size)}</text>`;
+    return s;
+  },
+
+  confetti(P,ctx){
+    const age=ctx.doneAge; if(!(age<700)||REDUCED) return '';
+    const t=age/700, c=P(0,0,this.geo.plinth+this.geo.stackFlat+6), cols=['--plate','--paper-accent','--ink'];
+    let s='';
+    for(let i=0;i<9;i++){
+      const a=-Math.PI*(.12+.76*i/8), d=8+28*easeOut(t);
+      s+=`<rect x="${f1(c[0]+Math.cos(a)*d)}" y="${f1(c[1]+Math.sin(a)*d*.75+12*t*t)}" width="2" height="2" style="fill:var(${cols[i%3]})" opacity="${(1-t).toFixed(2)}"/>`;
+    }
+    return s;
+  }
+};
+
+/* stubs: right viewBox, empty group, the swap point is draw() */
+function stub(name){
+  return {viewBox:'30 0 260 300', copy:GENERIC_COPY,
+    poseAt:()=>({}), staticPose:()=>({}),
+    draw:()=>`<g data-machine="${name}"><rect x="62" y="40" width="196" height="220" rx="14" style="fill:none;stroke:var(--muted);stroke-dasharray:4 5"/><text x="160" y="154" text-anchor="middle" class="m-stub">${name}: draw() goes here</text></g>`};
+}
+MACHINES.conveyor = stub('conveyor');
+MACHINES.sealer = stub('sealer');
+
+/* ---------- core (machine-agnostic) ---------- */
+function mountMachine(el, options){
+  const o = Object.assign({machine:'press', fileName:'file', fromSize:1, toSize:.5, copy:{}, onAction:null, autoState:true, duration:2800}, options);
+  let M = MACHINES[o.machine] || MACHINES.press;
+  const uid = ++UID;
+  el.classList.add('machine');
+  el.innerHTML = '<svg aria-hidden="true" focusable="false"></svg>'+
+    '<div class="machine-text"><p class="machine-cap"></p><p class="machine-sub" aria-live="polite"></p>'+
+    '<div class="machine-actions"><button class="machine-btn" type="button" hidden></button></div></div>';
+  const svg=el.querySelector('svg'), cap=el.querySelector('.machine-cap'), sub=el.querySelector('.machine-sub'), btn=el.querySelector('.machine-btn');
+  svg.setAttribute('viewBox', M.viewBox);
+
+  let state='idle', pose=null, trail=[], lastSample=0, lastChange=0, doneAt=-1e9, raf=0, playing=false, t0=0, resolvePlay=null;
+
+  const vars = ()=>({file:o.fileName, from:fmt(o.fromSize), to:fmt(o.toSize), pct:Math.round((1-o.toSize/o.fromSize)*100)+'%'});
+  const fill = s=>{const v=vars(); return (s||'').replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m);};
+  const phases = ()=>M.phases||DEFAULT_PHASES;
+  const stateFor = p=>{for(const ph of phases()) if(p<ph.end) return ph.name; return phases()[phases().length-1].name;};
+  const midOf = name=>{let prev=0; for(const ph of phases()){ if(ph.name===name) return (prev+ph.end)/2; prev=ph.end; } return 0;};
+
+  function text(){
+    const c = Object.assign({}, (M.copy||GENERIC_COPY)[state], (o.copy||{})[state]);
+    cap.textContent = fill(c.cap);
+    sub.textContent = fill(c.sub);
+    btn.hidden = !c.btn;
+    if(c.btn){ btn.textContent = fill(c.btn); btn.dataset.action = c.action||state; }
+    el.dataset.state = state;
+  }
+  function render(now){
+    if(now-lastSample>45){ trail.unshift(pose); if(trail.length>2) trail.length=2; lastSample=now; }
+    svg.innerHTML = M.draw(pose, {uid, opts:o, now, trail:REDUCED?[]:trail, doneAge: state==='done' ? now-doneAt : Infinity});
+  }
+  function applyProgress(p){
+    pose = M.poseAt(p,o); lastChange = performance.now();
+    if(o.autoState){ const s=stateFor(Math.min(p,.999)); if(s!==state){ state=s; text(); } }
+  }
+  function loop(now){
+    raf=0;
+    if(playing){
+      const p=clamp((now-t0)/o.duration);
+      if(p>=1){ playing=false; api.setState('done'); if(resolvePlay){resolvePlay(api); resolvePlay=null;} return; }
+      applyProgress(p);
+    }
+    render(now);
+    const busy = playing || (WORKING.has(state)&&pose&&pose.tremble&&!REDUCED) || now-doneAt<720 || now-lastChange<200;
+    if(busy) raf=requestAnimationFrame(loop);
+  }
+  const kick = ()=>{ if(!raf) raf=requestAnimationFrame(loop); };
+
+  const api = {
+    el,
+    get state(){ return state; },
+    /* drive needle, squash and numbers from real progress 0..1 */
+    setProgress(p){
+      p=clamp(+p||0); playing=false;
+      if(p>=1) return api.setState('done');
+      applyProgress(p); kick(); return api;
+    },
+    /* caption, subline, button and pose switch together */
+    setState(name){
+      playing=false; state=name; text();
+      pose = STATIC.has(name) ? M.staticPose(name,o) : M.poseAt(midOf(name),o);
+      if(name==='done') doneAt=performance.now();
+      trail=[]; lastChange=performance.now();
+      render(performance.now()); kick(); return api;
+    },
+    /* timed loop when no real progress exists; resolves at done */
+    play(){
+      if(REDUCED){ api.setState('done'); return Promise.resolve(api); }
+      trail=[]; playing=true; t0=performance.now(); applyProgress(0);
+      if(!o.autoState){ state='lowering'; text(); }
+      kick();
+      return new Promise(r=>{ resolvePlay=r; });
+    },
+    setMachine(name){
+      M = MACHINES[name]||MACHINES.press; o.machine=name;
+      svg.setAttribute('viewBox', M.viewBox); return api.setState(STATIC.has(state)?state:'idle');
+    },
+    update(next){ Object.assign(o,next); return api.setState(state); }
+  };
+
+  btn.addEventListener('click', ()=>{
+    const action = btn.dataset.action;
+    el.dispatchEvent(new CustomEvent('machine-action',{bubbles:true, detail:{action, state, machine:api}}));
+    if(o.onAction) return o.onAction(action, api);
+    if(action==='start'||action==='retry') api.play();
+    else if(action==='next') api.setState('idle');
+  });
+
+  api.setState('idle');
+  return api;
+}
+
+window.MACHINES = MACHINES;
+window.mountMachine = mountMachine;
+
+/* ---------- page: single view, or demo harness behind ?demo=1 ---------- */
+const DEMO_FILE = {fileName:'pitch-deck.pdf', fromSize:4.2, toSize:1.1};
+const app = document.getElementById('app');
+
+function single(){
+  app.className='single';
+  app.innerHTML='<div class="stage"><div id="m0"></div></div><p class="hint"><button class="link" id="toDemo" type="button">Open the demo grid</button></p>';
+  mountMachine(document.getElementById('m0'), DEMO_FILE);
+  document.getElementById('toDemo').onclick = demo;
+}
+
+function demo(){
+  app.className='demo';
+  const names=['idle','lowering','pressing','lifting','done','error'];
+  app.innerHTML=
+    '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side.</p>'+
+    '<div class="controls">'+
+      '<label>Machine <select id="pick">'+Object.keys(MACHINES).map(n=>`<option>${n}</option>`).join('')+'</select></label>'+
+      '<label class="grow">Progress <input type="range" id="prog" min="0" max="1000" value="0"></label>'+
+      '<button class="chip" id="play" type="button">Play loop</button>'+
+      '<button class="chip" id="dark" type="button" aria-pressed="false">Quiet Pixel dark</button>'+
+    '</div>'+
+    '<div class="states">'+names.map(n=>`<button class="chip" type="button" data-s="${n}">${n}</button>`).join('')+'</div>'+
+    '<section class="hero"><div id="live"></div></section>'+
+    '<section class="grid">'+names.map(n=>`<figure><figcaption>${n}</figcaption><div data-cell="${n}"></div></figure>`).join('')+'</section>';
+
+  const live = mountMachine(document.getElementById('live'), DEMO_FILE);
+  const cells = names.map(n=>mountMachine(app.querySelector(`[data-cell="${n}"]`), Object.assign({onAction:()=>{}}, DEMO_FILE)).setState(n));
+  const all = [live, ...cells];
+
+  document.getElementById('pick').onchange = e=>{ all.forEach(m=>m.setMachine(e.target.value)); cells.forEach((m,i)=>m.setState(names[i])); };
+  document.getElementById('prog').oninput = e=>live.setProgress(e.target.value/1000);
+  document.getElementById('play').onclick = ()=>{ document.getElementById('prog').value=0; live.play(); };
+  app.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>live.setState(b.dataset.s));
+  document.getElementById('dark').onclick = e=>{
+    const on=document.body.classList.toggle('qp-dark');
+    e.target.classList.toggle('on',on); e.target.setAttribute('aria-pressed',on);
+  };
+}
+
+if(new URLSearchParams(location.search).get('demo')==='1' || location.hash==='#demo') demo(); else single();
+})();
+</script>
+</body>
+</html>
