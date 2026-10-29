@@ -25,7 +25,8 @@ A family of small isometric machine animations for product states: loading, comp
 | Coffee Machine | Waiting states, brewing, warming up | In `index.html` (as `coffee`) |
 | Claw Sorter | Picking, sorting, retrieving one item from many | Standalone Grok build at `claw/` |
 | Vending Machine | Checkout, credits, claiming a reward | Built, standalone at `vending/` |
+| Subway | Data arriving and being sent: the train arriving is receiving, departing is sending, doors open is the exchange | Built, standalone at `subway/` |
 
 ## The page
 
-`index.html` is the family demo: eight machines registered in one file (press, conveyor, sealer, washer, printer, typewriter, distiller, coffee), a machine picker, a progress slider wired to `setProgress`, and a per-machine state grid. Open it with `?demo=1` for the full harness. Three machines also exist as standalone builds with their own state labs, `conveyor/` and `claw/` (Grok builds) and `vending/`, and every page carries a small Pages nav linking the four. Prompts for the family live in Cris's files (press, conveyor, washer, vending; Oct 29, 2026) and are candidates for the vault's Prompts shelf.
+`index.html` is the family demo: eight machines registered in one file (press, conveyor, sealer, washer, printer, typewriter, distiller, coffee), a machine picker, a progress slider wired to `setProgress`, and a per-machine state grid. Open it with `?demo=1` for the full harness. Four machines also exist as standalone builds with their own state labs: `conveyor/` and `claw/` (Grok builds), `vending/`, and `subway/`. Every page carries a small Pages nav linking the five. Prompts for the family live in Cris's files (press, conveyor, washer, vending; Oct 29, 2026) and are candidates for the vault's Prompts shelf.

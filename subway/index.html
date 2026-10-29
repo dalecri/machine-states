@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isometric Machine #5 — Subway Station</title>
+  <style>
+    :root {
+      --machine-dark: #26262b;
+      --machine-light: #d9d7e2;
+      --plate: #adbcf5;
+      --paper: #ffffff;
+      --accent: #ff6b5b;
+      --ground: #f4f3f8;
+      --ink: #1b1b20;
+      --muted: #6e6c78;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--ground);
+      color: var(--ink);
+      font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Host Component Styles */
+    .iso-machine {
+      width: 100%;
+      max-width: 360px;
+      min-width: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+
+    .iso-machine-stage {
+      width: 100%;
+      aspect-ratio: 320 / 340;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .iso-machine-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: hidden;
+    }
+
+    .iso-caption-block {
+      margin-top: 0.75rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      width: 100%;
+      min-height: 5.8rem;
+    }
+
+    .iso-caption {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+    }
+
+    .iso-subline {
+      font-size: 0.79rem;
+      color: var(--muted);
+      line-height: 1.38;
+      min-height: 1.1em;
+      max-width: 32ch;
+    }
+
+    .iso-btn {
+      margin-top: 0.45rem;
+      appearance: none;
+      background: var(--machine-dark);
+      color: var(--paper);
+      border: 1.5px solid var(--machine-dark);
+      border-radius: 5px;
+      padding: 0.42rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+    }
+
+    .iso-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--paper);
+    }
+
+    .iso-btn:active {
+      transform: translateY(1px);
+    }
+
+    .iso-btn[hidden] {
+      display: none !important;
+    }
+
+    /* Demo & Layout Chrome */
+    .demo-bar {
+      width: 100%;
+      max-width: 1120px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1.5px solid rgba(38, 38, 43, 0.12);
+    }
+
+    .demo-bar-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .demo-badge {
+      background: var(--machine-light);
+      color: var(--machine-dark);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+    }
+
+    .demo-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .demo-pill {
+      appearance: none;
+      background: var(--paper);
+      color: var(--ink);
+      border: 1.5px solid var(--machine-dark);
+      padding: 0.35rem 0.7rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.12s ease;
+    }
+
+    .demo-pill:hover, .demo-pill.active {
+      background: var(--machine-dark);
+      color: var(--paper);
+    }
+
+    .demo-pill.danger {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .demo-pill.danger:hover {
+      background: var(--accent);
+      color: var(--paper);
+    }
+
+    .single-stage-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 480px;
+      margin: 1rem auto;
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 12px;
+      padding: 2rem 1.5rem 1.75rem;
+      box-shadow: 0 12px 30px -12px rgba(38, 38, 43, 0.08);
+    }
+
+    .single-toolbar {
+      margin-top: 1.4rem;
+      padding-top: 1rem;
+      border-top: 1px dashed rgba(38, 38, 43, 0.16);
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+
+    .demo-grid {
+      width: 100%;
+      max-width: 1120px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .demo-tile {
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 10px;
+      padding: 1.15rem 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .demo-tile-head {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid rgba(38, 38, 43, 0.08);
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .demo-slider-bar {
+      width: 100%;
+      max-width: 1120px;
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 10px;
+      padding: 0.9rem 1.2rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .slider-group label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .slider-group input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .slider-val {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 3.2rem;
+      text-align: right;
+    }
+  .mnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:18px auto 4px;max-width:720px;font-family:inherit}
+.mnav-t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.mnav a{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
+.mnav a:hover{border-color:var(--muted)}
+.mnav a[aria-current]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav class="mnav"><span class="mnav-t">Pages</span><a href="../">Family demo &middot; 8 machines</a><a href="../conveyor/">Conveyor &middot; standalone build</a><a href="../claw/">Claw Sorter &middot; standalone build</a><a href="../vending/">Vending &middot; standalone build</a><a href="./" aria-current="page">Subway &middot; standalone build</a></nav>
+
+  <header class="demo-bar">
+    <div class="demo-bar-title">
+      <span>Machine #5 // Syncing Reading List</span>
+      <span class="demo-badge" id="mode-badge">Interactive</span>
+    </div>
+    <div class="demo-controls">
+      <button type="button" class="demo-pill" id="toggle-demo-btn">Switch to 6-State Harness (?demo=1)</button>
+    </div>
+  </header>
+
+  <main id="app-root" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></main>
+
+  <script>
+    /*
+     * ============================================================================
+     * HOW TO ADD A MACHINE TO THE ISOMETRIC FAMILY
+     * ============================================================================
+     * 1. Geometry: 30-degree isometric axes (cos30 = 0.866, sin30 = 0.5). Flat fills,
+     *    single 1.5px --machine-dark stroke with round joins, wide soft floor shadow.
+     * 2. Palette: Use only the 8 family CSS variables (--machine-dark, --machine-light,
+     *    --plate, --paper, --accent, --ground, --ink, --muted).
+     * 3. Six Canonical States (mapped per machine):
+     *    - "idle"               : Ready and waiting, calm platform, sign on STANDBY
+     *    - "working, arriving"  : Inbound payload, long ease-out + brake shudder
+     *    - "working, exchanging": Doors slide open, staggered cargo packet transfer
+     *    - "working, departing" : Doors close, signal green, ease-in acceleration
+     *    - "done"               : Sync complete, arrived stack settled, sign SYNCED
+     *    - "error"              : Delayed half-out of tunnel, red lamp, flashing sign
+     * 4. Motion Rules: Eased curves only (never linear). Moving parts render a 2-frame
+     *    staggered low-opacity trail. Respect prefers-reduced-motion by collapsing
+     *    directly to the static "done" pose.
+     * 5. API Contract: mountMachine(el, opts) -> { setState, setProgress, play, destroy }.
+     * ============================================================================
+     */
+
+    (function () {
+      const SVG_NS = "http://www.w3.org/2000/svg";
+
+      // Easing curves (never linear)
+      const easeOutQuart = (t) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 4);
+      const easeInCubic = (t) => {
+        const c = Math.max(0, Math.min(1, t));
+        return c * c * c;
+      };
+      const easeInOutCubic = (t) => {
+        const c = Math.max(0, Math.min(1, t));
+        return c < 0.5 ? 4 * c * c * c : 1 - Math.pow(-2 * c + 2, 3) / 2;
+      };
+
+      function createSvgEl(tag, attrs = {}) {
+        const el = document.createElementNS(SVG_NS, tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          el.setAttribute(k, String(v));
+        }
+        return el;
+      }
+
+      // Draws one isometric data packet block (paper-white cube with a plate edge)
+      function createPacketBlock() {
+        const g = createSvgEl("g", {
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.2",
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+        // Top face (paper white)
+        g.appendChild(createSvgEl("polygon", {
+          points: "0,-8 8,-3.5 0,1 -8,-3.5",
+          fill: "var(--paper)"
+        }));
+        // Left-front face (paper white)
+        g.appendChild(createSvgEl("polygon", {
+          points: "-8,-3.5 0,1 0,8 -8,3.5",
+          fill: "var(--paper)"
+        }));
+        // Right-front face (plate periwinkle edge)
+        g.appendChild(createSvgEl("polygon", {
+          points: "0,1 8,-3.5 8,3.5 0,8",
+          fill: "var(--plate)"
+        }));
+        return g;
+      }
+
+      // Builds the 3-car isometric subway train group in local track-aligned space
+      function buildTrainAssembly() {
+        const root = createSvgEl("g", {
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4",
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+
+        // Subtle undercarriage shadow along track bed
+        root.appendChild(createSvgEl("polygon", {
+          points: "-178,-89 6,-9 -12,1 -196,-79",
+          fill: "var(--machine-dark)",
+          opacity: "0.28",
+          stroke: "none"
+        }));
+
+        // Couplers between cars
+        const couplers = [
+          "-124,-68 -114,-63 -114,-51 -124,-56",
+          "-64,-38 -54,-33 -54,-21 -64,-26"
+        ];
+        couplers.forEach((pts) => {
+          root.appendChild(createSvgEl("polygon", {
+            points: pts,
+            fill: "var(--machine-dark)"
+          }));
+        });
+
+        const leftDoors = [];
+        const rightDoors = [];
+
+        // 3 short cars along the isometric track vector (+1, +0.5):
+        // Car 0 (Rear): s in [-176, -124], Car 1 (Middle): s in [-116, -64], Car 2 (Front): s in [-56, 0]
+        const cars = [
+          { s0: -176, s1: -124, isFront: false },
+          { s0: -116, s1: -64, isFront: false },
+          { s0: -56, s1: 0, isFront: true }
+        ];
+
+        cars.forEach((car) => {
+          const { s0, s1, isFront } = car;
+          const y0 = s0 * 0.5;
+          const y1 = s1 * 0.5;
+
+          // Roof offset vector (-18, +10), height vector (0, -25)
+          // Top Roof Face
+          root.appendChild(createSvgEl("polygon", {
+            points: `${s0},${y0 - 25} ${s1},${y1 - 25} ${s1 - 18},${y1 - 15} ${s0 - 18},${y0 - 15}`,
+            fill: "var(--paper)"
+          }));
+
+          // Front-Left Side Wall (facing platform)
+          const sideX0 = s0 - 18, sideY0 = y0 - 15;
+          const sideX1 = s1 - 18, sideY1 = y1 - 15;
+          root.appendChild(createSvgEl("polygon", {
+            points: `${sideX0},${sideY0} ${sideX1},${sideY1} ${sideX1},${sideY1 + 25} ${sideX0},${sideY0 + 25}`,
+            fill: "var(--machine-light)"
+          }));
+
+          // Plate-tone horizontal livery stripe along the lower body
+          root.appendChild(createSvgEl("polygon", {
+            points: `${sideX0},${sideY0 + 15} ${sideX1},${sideY1 + 15} ${sideX1},${sideY1 + 20} ${sideX0},${sideY0 + 20}`,
+            fill: "var(--plate)"
+          }));
+
+          // Two small square isometric windows per car
+          const winOffsets = [7, 37];
+          winOffsets.forEach((wOff) => {
+            const wx0 = sideX0 + wOff;
+            const wy0 = sideY0 + wOff * 0.5 + 4;
+            const wx1 = wx0 + 8;
+            const wy1 = wy0 + 4;
+            root.appendChild(createSvgEl("polygon", {
+              points: `${wx0},${wy0} ${wx1},${wy1} ${wx1},${wy1 + 7} ${wx0},${wy0 + 7}`,
+              fill: "var(--machine-dark)"
+            }));
+          });
+
+          // Dark interior recess behind the center sliding doors
+          const dOff = 19;
+          const dx0 = sideX0 + dOff;
+          const dy0 = sideY0 + dOff * 0.5 + 3;
+          const dx1 = dx0 + 14;
+          const dy1 = dy0 + 7;
+          root.appendChild(createSvgEl("polygon", {
+            points: `${dx0},${dy0} ${dx1},${dy1} ${dx1},${dy1 + 19} ${dx0},${dy0 + 19}`,
+            fill: "var(--machine-dark)"
+          }));
+
+          // Left & Right Sliding Door leaves (each 7 units wide along track)
+          const dxMid = dx0 + 7;
+          const dyMid = dy0 + 3.5;
+
+          const leftDoor = createSvgEl("g");
+          leftDoor.appendChild(createSvgEl("polygon", {
+            points: `${dx0},${dy0} ${dxMid},${dyMid} ${dxMid},${dyMid + 19} ${dx0},${dy0 + 19}`,
+            fill: "var(--machine-light)"
+          }));
+          leftDoor.appendChild(createSvgEl("polygon", {
+            points: `${dx0 + 1.5},${dy0 + 2} ${dxMid - 1.2},${dyMid + 0.6} ${dxMid - 1.2},${dyMid + 8} ${dx0 + 1.5},${dy0 + 9.4}`,
+            fill: "var(--plate)"
+          }));
+
+          const rightDoor = createSvgEl("g");
+          rightDoor.appendChild(createSvgEl("polygon", {
+            points: `${dxMid},${dyMid} ${dx1},${dy1} ${dx1},${dy1 + 19} ${dxMid},${dyMid + 19}`,
+            fill: "var(--machine-light)"
+          }));
+          rightDoor.appendChild(createSvgEl("polygon", {
+            points: `${dxMid + 1.2},${dyMid + 0.6} ${dx1 - 1.5},${dy1 + 2} ${dx1 - 1.5},${dy1 + 9.4} ${dxMid + 1.2},${dyMid + 8}`,
+            fill: "var(--plate)"
+          }));
+
+          root.appendChild(leftDoor);
+          root.appendChild(rightDoor);
+          leftDoors.push(leftDoor);
+          rightDoors.push(rightDoor);
+
+          // Front Nose Cab with rounded profile, windshield, and single round headlight
+          if (isFront) {
+            // Sloped aerodynamic nose Bulkhead
+            root.appendChild(createSvgEl("path", {
+              d: `M ${s1},${y1 - 25} Q ${s1 + 6},${y1 - 14} ${s1 + 4},${y1} L ${sideX1 + 4},${sideY1 + 25} Q ${sideX1 + 6},${sideY1 + 11} ${sideX1},${sideY1} Z`,
+              fill: "var(--machine-light)"
+            }));
+            // Wrap-around plate stripe on nose
+            root.appendChild(createSvgEl("polygon", {
+              points: `${sideX1},${sideY1 + 15} ${s1 + 4.5},${y1 - 9} ${s1 + 4.2},${y1 - 4} ${sideX1},${sideY1 + 20}`,
+              fill: "var(--plate)"
+            }));
+            // Front cab windshield
+            root.appendChild(createSvgEl("polygon", {
+              points: `${sideX1 + 2},${sideY1 + 4} ${s1 + 2},${y1 - 20} ${s1 + 3.5},${y1 - 12} ${sideX1 + 3.5},${sideY1 + 12}`,
+              fill: "var(--machine-dark)"
+            }));
+            // One round headlight on nose center
+            root.appendChild(createSvgEl("ellipse", {
+              cx: String(s1 - 4.5),
+              cy: String(y1 - 1.5),
+              rx: "3.2",
+              ry: "3.8",
+              fill: "var(--paper)"
+            }));
+          } else {
+            // Standard flat end bulkhead for rear/middle cars
+            root.appendChild(createSvgEl("polygon", {
+              points: `${s1},${y1 - 25} ${s1},${y1} ${sideX1},${sideY1 + 25} ${sideX1},${sideY1}`,
+              fill: "var(--plate)"
+            }));
+          }
+        });
+
+        // Warm headlight beam cone projecting ahead of the front car
+        const headlightBeam = createSvgEl("polygon", {
+          points: "-3,-1 58,28 36,44 -10,5",
+          fill: "var(--paper)",
+          opacity: "0",
+          stroke: "none",
+          "pointer-events": "none"
+        });
+        root.appendChild(headlightBeam);
+
+        // Speed trail lines behind the train for departure acceleration
+        const speedLines = createSvgEl("g", {
+          opacity: "0",
+          stroke: "var(--plate)",
+          "stroke-width": "1.6",
+          "stroke-linecap": "round"
+        });
+        speedLines.appendChild(createSvgEl("line", { x1: "-198", y1: "-112", x2: "-236", y2: "-131" }));
+        speedLines.appendChild(createSvgEl("line", { x1: "-190", y1: "-94", x2: "-234", y2: "-116" }));
+        speedLines.appendChild(createSvgEl("line", { x1: "-184", y1: "-120", x2: "-216", y2: "-136" }));
+        root.appendChild(speedLines);
+
+        return {
+          root,
+          leftDoors,
+          rightDoors,
+          headlightBeam,
+          speedLines
+        };
+      }
+
+      // Main Component Factory
+      function mountMachine(el, options = {}) {
+        const cfg = Object.assign({
+          machine: "subway",
+          total: 1240,
+          fromLabel: "Server A",
+          toLabel: "Archive"
+        }, options);
+
+        const totalFormatted = Number(cfg.total).toLocaleString("en-US");
+
+        // Build DOM skeleton
+        el.innerHTML = "";
+        const root = document.createElement("div");
+        root.className = "iso-machine";
+
+        const stage = document.createElement("div");
+        stage.className = "iso-machine-stage";
+
+        const svg = createSvgEl("svg", {
+          viewBox: "0 0 320 340",
+          class: "iso-machine-svg",
+          "aria-hidden": "true",
+          focusable: "false"
+        });
+
+        const captionBlock = document.createElement("div");
+        captionBlock.className = "iso-caption-block";
+
+        const captionEl = document.createElement("div");
+        captionEl.className = "iso-caption";
+
+        const sublineEl = document.createElement("div");
+        sublineEl.className = "iso-subline";
+        sublineEl.setAttribute("aria-live", "polite");
+
+        const actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.className = "iso-btn";
+
+        captionBlock.appendChild(captionEl);
+        captionBlock.appendChild(sublineEl);
+        captionBlock.appendChild(actionBtn);
+        stage.appendChild(svg);
+        root.appendChild(stage);
+        root.appendChild(captionBlock);
+        el.appendChild(root);
+
+        // ====================================================================
+        // BUILD 30-DEGREE ISOMETRIC SUBWAY STATION SCENE
+        // ====================================================================
+        const defs = createSvgEl("defs");
+
+        // Clip path so the train emerges cleanly out of the back-left tunnel portal
+        // and disappears cleanly when departing to the bottom-right station exit
+        const trackClipId = "track-clip-" + Math.random().toString(36).slice(2, 7);
+        const trackClip = createSvgEl("clipPath", { id: trackClipId });
+        trackClip.appendChild(createSvgEl("polygon", {
+          points: "96,86 318,197 318,285 48,150"
+        }));
+        defs.appendChild(trackClip);
+        svg.appendChild(defs);
+
+        // 1. Wide soft floor shadow
+        svg.appendChild(createSvgEl("polygon", {
+          points: "16,178 228,284 308,244 96,138",
+          fill: "var(--machine-dark)",
+          opacity: "0.10"
+        }));
+        svg.appendChild(createSvgEl("polygon", {
+          points: "28,176 226,275 294,241 96,142",
+          fill: "var(--machine-dark)",
+          opacity: "0.07"
+        }));
+
+        const sceneGroup = createSvgEl("g", {
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+        svg.appendChild(sceneGroup);
+
+        // 2. Back Tunnel Portal Housing (at upper-left of track bed)
+        // Top Roof of Tunnel Block
+        sceneGroup.appendChild(createSvgEl("polygon", {
+          points: "34,68 88,95 128,75 74,48",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+        // Left Side Wall of Tunnel Block
+        sceneGroup.appendChild(createSvgEl("polygon", {
+          points: "34,68 88,95 88,162 34,135",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+        // Portal Face Wall (perpendicular to tracks)
+        sceneGroup.appendChild(createSvgEl("polygon", {
+          points: "88,95 128,75 128,142 88,162",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+        sceneGroup.appendChild(createSvgEl("polygon", {
+          points: "88,95 128,75 128,142 88,162",
+          fill: "var(--machine-dark)",
+          opacity: "0.08"
+        }));
+
+        // Arched Dark Tunnel Mouth Opening
+        const tunnelMouthPath = "M 95,158 L 95,112 Q 108,97 122,100 L 122,145 Z";
+        sceneGroup.appendChild(createSvgEl("path", {
+          d: tunnelMouthPath,
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // Tunnel Interior Glow (warms up as the arriving train approaches)
+        const tunnelGlow = createSvgEl("path", {
+          d: tunnelMouthPath,
+          fill: "var(--accent)",
+          opacity: "0"
+        });
+        const tunnelHeadlightDot = createSvgEl("circle", {
+          cx: "108",
+          cy: "128",
+          r: "4.5",
+          fill: "var(--paper)",
+          opacity: "0"
+        });
+        sceneGroup.appendChild(tunnelGlow);
+        sceneGroup.appendChild(tunnelHeadlightDot);
+
+        // 3. Diagonal Isometric Track Bed, Sleeper Ties, and Two Rails
+        // Track bed recessed trough
+        sceneGroup.appendChild(createSvgEl("polygon", {
+          points: "88,162 128,142 308,232 268,252",
+          fill: "var(--machine-dark)",
+          opacity: "0.14",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4"
+        }));
+
+        // 13 Isometric Sleeper Ties across the track bed
+        const sleepersGroup = createSvgEl("g", {
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.8",
+          opacity: "0.55"
+        });
+        for (let i = 0; i < 13; i++) {
+          const u = (i + 0.6) / 13.2;
+          const tx1 = 94 + u * 174;
+          const ty1 = 158 + u * 87;
+          const tx2 = tx1 + 26;
+          const ty2 = ty1 - 13;
+          sleepersGroup.appendChild(createSvgEl("line", {
+            x1: tx1.toFixed(1), y1: ty1.toFixed(1),
+            x2: tx2.toFixed(1), y2: ty2.toFixed(1)
+          }));
+        }
+        sceneGroup.appendChild(sleepersGroup);
+
+        // Two continuous steel rails in plate/dark tone
+        sceneGroup.appendChild(createSvgEl("line", {
+          x1: "100", y1: "155", x2: "280", y2: "245",
+          stroke: "var(--machine-dark)", "stroke-width": "2.2"
+        }));
+        sceneGroup.appendChild(createSvgEl("line", {
+          x1: "114", y1: "148", x2: "294", y2: "238",
+          stroke: "var(--machine-dark)", "stroke-width": "2.2"
+        }));
+        sceneGroup.appendChild(createSvgEl("line", {
+          x1: "100", y1: "154", x2: "280", y2: "244",
+          stroke: "var(--plate)", "stroke-width": "1"
+        }));
+        sceneGroup.appendChild(createSvgEl("line", {
+          x1: "114", y1: "147", x2: "294", y2: "237",
+          stroke: "var(--plate)", "stroke-width": "1"
+        }));
+
+        // 4. Signal Post at the Tunnel Mouth with One Lamp
+        const signalGroup = createSvgEl("g");
+        // Post mast
+        signalGroup.appendChild(createSvgEl("line", {
+          x1: "132", y1: "140", x2: "132", y2: "106",
+          stroke: "var(--machine-dark)", "stroke-width": "2.2"
+        }));
+        // Signal head housing box
+        signalGroup.appendChild(createSvgEl("rect", {
+          x: "126", y: "94", width: "12", height: "15", rx: "3",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4"
+        }));
+        // Signal Lamp Halo & Core (green #35c97b while moving, accent-red while held)
+        const signalHalo = createSvgEl("circle", {
+          cx: "132", cy: "101.5", r: "6.5",
+          fill: "var(--accent)",
+          opacity: "0.28"
+        });
+        const signalLamp = createSvgEl("circle", {
+          cx: "132", cy: "101.5", r: "3.4",
+          fill: "var(--accent)"
+        });
+        signalGroup.appendChild(signalHalo);
+        signalGroup.appendChild(signalLamp);
+        sceneGroup.appendChild(signalGroup);
+
+        // 5. Clipped Train Viewport + 2-Frame Motion Blur Trails
+        const trainViewport = createSvgEl("g", {
+          "clip-path": `url(#${trackClipId})`
+        });
+        sceneGroup.appendChild(trainViewport);
+
+        const trainTrail2Obj = buildTrainAssembly();
+        const trainTrail1Obj = buildTrainAssembly();
+        const trainMainObj = buildTrainAssembly();
+
+        trainTrail2Obj.root.setAttribute("opacity", "0");
+        trainTrail1Obj.root.setAttribute("opacity", "0");
+        trainViewport.appendChild(trainTrail2Obj.root);
+        trainViewport.appendChild(trainTrail1Obj.root);
+        trainViewport.appendChild(trainMainObj.root);
+
+        // 6. Raised Foreground Platform with Thin Accent Safety Line
+        const platformGroup = createSvgEl("g");
+        sceneGroup.appendChild(platformGroup);
+
+        // Platform Top Deck
+        platformGroup.appendChild(createSvgEl("polygon", {
+          points: "68,162 248,252 210,271 30,181",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        }));
+
+        // Platform Left Skirt
+        platformGroup.appendChild(createSvgEl("polygon", {
+          points: "30,181 68,162 68,180 30,199",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // Platform Long Front Wall
+        platformGroup.appendChild(createSvgEl("polygon", {
+          points: "30,181 210,271 210,289 30,199",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        }));
+        platformGroup.appendChild(createSvgEl("polygon", {
+          points: "30,181 210,271 210,289 30,199",
+          fill: "var(--machine-dark)",
+          opacity: "0.08"
+        }));
+
+        // Platform Right End Wall
+        platformGroup.appendChild(createSvgEl("polygon", {
+          points: "210,271 248,252 248,270 210,289",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // Thin Accent Safety Line along the platform's inner track edge + door alignment ticks
+        platformGroup.appendChild(createSvgEl("line", {
+          x1: "72", y1: "167", x2: "242", y2: "252",
+          stroke: "var(--accent)",
+          "stroke-width": "2.2",
+          "stroke-linecap": "round"
+        }));
+        // Three platform door-alignment marks matching the 3 stopped car doors
+        const doorTickCoords = [
+          { x: 103, y: 182.5 },
+          { x: 163, y: 212.5 },
+          { x: 223, y: 242.5 }
+        ];
+        doorTickCoords.forEach((pt) => {
+          platformGroup.appendChild(createSvgEl("line", {
+            x1: String(pt.x), y1: String(pt.y),
+            x2: String(pt.x - 6), y2: String(pt.y + 3),
+            stroke: "var(--accent)",
+            "stroke-width": "2"
+          }));
+        });
+
+        // 7. Data Cargo Packet Stacks & Animated Exchange Streams
+        const cargoLayer = createSvgEl("g");
+        sceneGroup.appendChild(cargoLayer);
+
+        // Outbound stack waiting on platform (before boarding train)
+        const outboundSlots = [
+          { x: 88, y: 194 },
+          { x: 100, y: 200 },
+          { x: 88, y: 186 },
+          { x: 148, y: 224 },
+          { x: 160, y: 230 },
+          { x: 148, y: 216 }
+        ];
+        const outboundStackEls = outboundSlots.map((pos) => {
+          const elBlock = createPacketBlock();
+          elBlock.setAttribute("transform", `translate(${pos.x}, ${pos.y})`);
+          cargoLayer.appendChild(elBlock);
+          return elBlock;
+        });
+
+        // Inbound stack landed on platform (arrived from train)
+        const inboundSlots = [
+          { x: 118, y: 209 },
+          { x: 130, y: 215 },
+          { x: 118, y: 201 },
+          { x: 178, y: 239 },
+          { x: 190, y: 245 },
+          { x: 178, y: 231 }
+        ];
+        const inboundStackEls = inboundSlots.map((pos) => {
+          const elBlock = createPacketBlock();
+          elBlock.setAttribute("transform", `translate(${pos.x}, ${pos.y})`);
+          elBlock.setAttribute("opacity", "0");
+          cargoLayer.appendChild(elBlock);
+          return elBlock;
+        });
+
+        // Active moving packets during "working, exchanging" (with 2-frame fade trails)
+        const movingPackets = [];
+        for (let i = 0; i < 6; i++) {
+          const t2 = createPacketBlock();
+          const t1 = createPacketBlock();
+          const main = createPacketBlock();
+          t2.setAttribute("opacity", "0");
+          t1.setAttribute("opacity", "0");
+          main.setAttribute("opacity", "0");
+          cargoLayer.appendChild(t2);
+          cargoLayer.appendChild(t1);
+          cargoLayer.appendChild(main);
+          movingPackets.push({ main, t1, t2, history: [] });
+        }
+
+        // 8. Hanging Station Sign Above the Platform (Digital Display in Accent)
+        const signGroup = createSvgEl("g");
+        sceneGroup.appendChild(signGroup);
+
+        // Two vertical suspension rods from top frame
+        signGroup.appendChild(createSvgEl("line", {
+          x1: "144", y1: "18", x2: "144", y2: "62",
+          stroke: "var(--machine-dark)", "stroke-width": "2"
+        }));
+        signGroup.appendChild(createSvgEl("line", {
+          x1: "224", y1: "58", x2: "224", y2: "102",
+          stroke: "var(--machine-dark)", "stroke-width": "2"
+        }));
+
+        // Isometric Top Rim of Sign Board
+        signGroup.appendChild(createSvgEl("polygon", {
+          points: "126,52 242,110 248,107 132,49",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4"
+        }));
+        // Isometric Right Side Depth of Sign Board
+        signGroup.appendChild(createSvgEl("polygon", {
+          points: "242,110 248,107 248,135 242,138",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4"
+        }));
+
+        // Dark Digital Sign Band (Front Isometric Plane)
+        const signBoardFace = createSvgEl("polygon", {
+          points: "126,52 242,110 242,138 126,80",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        });
+        signGroup.appendChild(signBoardFace);
+
+        // Thin inner plate trim line along top of sign
+        signGroup.appendChild(createSvgEl("line", {
+          x1: "131", y1: "58", x2: "237", y2: "111",
+          stroke: "var(--plate)",
+          "stroke-width": "1.2",
+          opacity: "0.7"
+        }));
+
+        // Skewed Digital Display Text inside the Sign Band
+        const signTextGroup = createSvgEl("g", {
+          transform: "translate(184, 98) skewY(26.565)"
+        });
+        const signTextEl = createSvgEl("text", {
+          x: "0",
+          y: "3.5",
+          fill: "var(--accent)",
+          "font-size": "10.5",
+          "font-weight": "700",
+          "text-anchor": "middle",
+          "letter-spacing": "0.6"
+        });
+        signTextEl.textContent = "STANDBY";
+        signTextGroup.appendChild(signTextEl);
+        signGroup.appendChild(signTextGroup);
+
+        // ====================================================================
+        // STATE DEFINITIONS & COPY (DATA-DRIVEN, NEVER HARD-CODED IN SVG)
+        // ====================================================================
+        const STATE_META = {
+          "idle": {
+            caption: "Ready to sync",
+            subline: `${cfg.fromLabel} to ${cfg.toLabel}, ${totalFormatted} records waiting`,
+            button: "Run sync",
+            sign: "STANDBY"
+          },
+          "working, arriving": {
+            caption: `Receiving from ${cfg.fromLabel}`,
+            subline: `${totalFormatted} records inbound`,
+            button: null,
+            sign: "2 MIN"
+          },
+          "working, exchanging": {
+            caption: "Loading and unloading",
+            subline: `0 of ${totalFormatted} exchanged`,
+            button: null,
+            sign: "0"
+          },
+          "working, departing": {
+            caption: `Sending to ${cfg.toLabel}`,
+            subline: `${totalFormatted} records outbound`,
+            button: null,
+            sign: "OUTBOUND"
+          },
+          "done": {
+            caption: "Sync complete, nothing lost",
+            subline: `${totalFormatted} records synced between ${cfg.fromLabel} and ${cfg.toLabel}`,
+            button: "View log",
+            sign: "SYNCED 04S"
+          },
+          "error": {
+            caption: "The connection stalled on the way out",
+            subline: "Everything received is saved; sending resumes where it stopped",
+            button: "Retry departure",
+            sign: "DELAYED"
+          }
+        };
+
+        // ====================================================================
+        // POSE HELPERS & 2-FRAME TRAIL ENGINE
+        // ====================================================================
+        const STATION_STOP_S = 264; // Front nose stops at (264, 210) aligned with platform marks
+        let currentState = "idle";
+        let rafId = null;
+        let stateStartTime = performance.now();
+        let playActive = false;
+        let retryDeparting = false;
+        let trainHistory = [];
+
+        const prefersReducedMotion = () =>
+          window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        // Sets the signal lamp color: green while train moves, accent-red while held
+        function setSignalLamp(isMovingGreen) {
+          const color = isMovingGreen ? "#32c47c" : "var(--accent)";
+          signalLamp.setAttribute("fill", color);
+          signalHalo.setAttribute("fill", color);
+        }
+
+        function setSignDisplay(text, visible = true) {
+          signTextEl.textContent = text;
+          signTextEl.setAttribute("opacity", visible ? "1" : "0.18");
+        }
+
+        // Moves all 3 train cars' sliding doors (openAmount in 0..1)
+        function setTrainDoors(trainObj, openAmount) {
+          const d = Math.max(0, Math.min(1, openAmount)) * 5.8;
+          trainObj.leftDoors.forEach((door) => {
+            door.setAttribute("transform", `translate(${(-d).toFixed(2)}, ${(-d * 0.5).toFixed(2)})`);
+          });
+          trainObj.rightDoors.forEach((door) => {
+            door.setAttribute("transform", `translate(${d.toFixed(2)}, ${(d * 0.5).toFixed(2)})`);
+          });
+        }
+
+        // Positions the train along track coordinate `s` with a 2-frame fade trail
+        function setTrainTrackPosition(s, doorOpen = 0, showTrail = true, stretchFactor = 1, headlightAlpha = 0, speedAlpha = 0) {
+          const x = s;
+          const y = 78 + s * 0.5;
+
+          trainMainObj.root.setAttribute("transform", `translate(${x.toFixed(2)}, ${y.toFixed(2)})`);
+          trainMainObj.root.setAttribute("opacity", "1");
+          setTrainDoors(trainMainObj, doorOpen);
+          trainMainObj.headlightBeam.setAttribute("opacity", headlightAlpha.toFixed(2));
+          trainMainObj.speedLines.setAttribute("opacity", speedAlpha.toFixed(2));
+
+          const prev1 = trainHistory[trainHistory.length - 1];
+          const prev2 = trainHistory[trainHistory.length - 2];
+
+          if (showTrail && prev1 && Math.abs(s - prev1.s) > 0.6) {
+            const ds1 = (prev1.s - s) * stretchFactor;
+            const tx1 = s + ds1;
+            const ty1 = 78 + tx1 * 0.5;
+            trainTrail1Obj.root.setAttribute("transform", `translate(${tx1.toFixed(2)}, ${ty1.toFixed(2)})`);
+            trainTrail1Obj.root.setAttribute("opacity", "0.34");
+          } else {
+            trainTrail1Obj.root.setAttribute("opacity", "0");
+          }
+
+          if (showTrail && prev2 && Math.abs(s - prev2.s) > 1.2) {
+            const ds2 = (prev2.s - s) * stretchFactor;
+            const tx2 = s + ds2;
+            const ty2 = 78 + tx2 * 0.5;
+            trainTrail2Obj.root.setAttribute("transform", `translate(${tx2.toFixed(2)}, ${ty2.toFixed(2)})`);
+            trainTrail2Obj.root.setAttribute("opacity", "0.16");
+          } else {
+            trainTrail2Obj.root.setAttribute("opacity", "0");
+          }
+
+          trainHistory.push({ s });
+          if (trainHistory.length > 4) trainHistory.shift();
+        }
+
+        function setStacksVisibility(outboundCount, inboundCount) {
+          outboundStackEls.forEach((elBlock, idx) => {
+            elBlock.setAttribute("opacity", idx < outboundCount ? "1" : "0");
+          });
+          inboundStackEls.forEach((elBlock, idx) => {
+            elBlock.setAttribute("opacity", idx < inboundCount ? "1" : "0");
+          });
+        }
+
+        function hideMovingPackets() {
+          movingPackets.forEach((pkt) => {
+            pkt.main.setAttribute("opacity", "0");
+            pkt.t1.setAttribute("opacity", "0");
+            pkt.t2.setAttribute("opacity", "0");
+            pkt.history = [];
+          });
+        }
+
+        function resetVisualScene() {
+          trainHistory = [];
+          hideMovingPackets();
+          tunnelGlow.setAttribute("opacity", "0");
+          tunnelHeadlightDot.setAttribute("opacity", "0");
+          setTrainTrackPosition(50, 0, false, 1, 0, 0);
+          trainMainObj.root.setAttribute("opacity", "0");
+          trainTrail1Obj.root.setAttribute("opacity", "0");
+          trainTrail2Obj.root.setAttribute("opacity", "0");
+          setStacksVisibility(6, 0);
+          setSignalLamp(false);
+          setSignDisplay("STANDBY", true);
+        }
+
+        // ====================================================================
+        // PHASE RENDERERS (DRIVEN BY BOTH TIMELINE AND setProgress(0..1))
+        // ====================================================================
+
+        // Phase 1: Arriving (receiving) — tunnel glow first, headlight dot, long ease-out + brake shudder
+        function renderArrivingPhase(u) {
+          setSignalLamp(true); // Green while train moves
+          setStacksVisibility(6, 0);
+          hideMovingPackets();
+
+          if (u < 0.16) {
+            // Glow grows inside the dark tunnel portal and headlight appears
+            const g = easeInOutCubic(u / 0.16);
+            tunnelGlow.setAttribute("opacity", (g * 0.55).toFixed(2));
+            tunnelHeadlightDot.setAttribute("opacity", g.toFixed(2));
+            trainMainObj.root.setAttribute("opacity", "0");
+            setSignDisplay("2 MIN", true);
+          } else {
+            // Train slides out along rails with a long ease-out and one small brake shudder at the end
+            const t = (u - 0.16) / 0.84;
+            const eased = easeOutQuart(t);
+
+            // Small brake shudder as it comes to a halt (t in 0.84..0.98)
+            let shudder = 0;
+            if (t > 0.84 && t < 0.99) {
+              const st = (t - 0.84) / 0.15;
+              shudder = Math.sin(st * Math.PI * 2) * 2.2 * (1 - st);
+            }
+
+            const s = 92 + eased * (STATION_STOP_S - 92) + shudder;
+            const glowFade = Math.max(0.18, (1 - t * 0.7) * 0.55);
+            tunnelGlow.setAttribute("opacity", glowFade.toFixed(2));
+            tunnelHeadlightDot.setAttribute("opacity", "0");
+
+            setTrainTrackPosition(s, 0, t < 0.94, 1.15, 0.48 * (1 - t * 0.5), 0);
+            setSignDisplay(t < 0.55 ? "2 MIN" : "1 MIN", true);
+
+            if (t >= 0.96) {
+              setSignalLamp(false); // Held at platform once stopped
+            }
+          }
+        }
+
+        // Phase 2: Exchanging — doors slide open, packet blocks bob in staggered lines in/out
+        function renderExchangingPhase(u) {
+          setSignalLamp(false); // Held at platform
+          tunnelGlow.setAttribute("opacity", "0.15");
+          tunnelHeadlightDot.setAttribute("opacity", "0");
+
+          // Doors open over first 0.18 of phase; packets lag a beat behind doors opening
+          const doorOpen = easeInOutCubic(Math.min(1, u / 0.18));
+          setTrainTrackPosition(STATION_STOP_S, doorOpen, false, 1, 0.15, 0);
+
+          // Packet exchange runs over u in [0.12 .. 0.95]
+          const exU = Math.max(0, Math.min(1, (u - 0.12) / 0.83));
+          const count = Math.round(easeInOutCubic(exU) * cfg.total);
+          const countFormatted = count.toLocaleString("en-US");
+
+          setSignDisplay(countFormatted, true);
+          sublineEl.textContent = `${countFormatted} of ${totalFormatted} exchanged`;
+
+          // Deplete outbound platform stack & build inbound platform stack progressively
+          const remainingOutbound = Math.max(0, 6 - Math.floor(exU * 6.4));
+          const landedInbound = Math.min(6, Math.floor(exU * 6.4));
+          setStacksVisibility(remainingOutbound, landedInbound);
+
+          // 2 staggered lines of moving packet blocks (3 inbound from train -> platform, 3 outbound from platform -> train)
+          const doorPaths = [
+            // Inbound streams (Car 1 & Car 2 doors onto platform inbound stack)
+            { startX: 170, startY: 204, endX: 124, endY: 208, delay: 0.00 },
+            { startX: 170, startY: 204, endX: 132, endY: 214, delay: 0.22 },
+            { startX: 228, startY: 233, endX: 184, endY: 238, delay: 0.10 },
+            // Outbound streams (Platform outbound stack into Car 0 & Car 1 doors)
+            { startX: 94, startY: 196, endX: 112, endY: 176, delay: 0.06 },
+            { startX: 154, startY: 226, endX: 172, endY: 205, delay: 0.18 },
+            { startX: 94, startY: 188, endX: 112, endY: 176, delay: 0.30 }
+          ];
+
+          movingPackets.forEach((pkt, idx) => {
+            const spec = doorPaths[idx];
+            const localT = (exU * 1.45 - spec.delay) % 0.65 / 0.65;
+
+            if (exU <= 0.01 || exU >= 0.98 || localT < 0 || localT > 1) {
+              pkt.main.setAttribute("opacity", "0");
+              pkt.t1.setAttribute("opacity", "0");
+              pkt.t2.setAttribute("opacity", "0");
+              return;
+            }
+
+            const p = easeInOutCubic(localT);
+            // A few pixels of vertical bob as the packet travels
+            const bob = Math.sin(localT * Math.PI * 3) * 3.2;
+            const cx = spec.startX + (spec.endX - spec.startX) * p;
+            const cy = spec.startY + (spec.endY - spec.startY) * p - Math.abs(bob);
+
+            pkt.main.setAttribute("transform", `translate(${cx.toFixed(1)}, ${cy.toFixed(1)})`);
+            pkt.main.setAttribute("opacity", "1");
+
+            const prev1 = pkt.history[pkt.history.length - 1];
+            const prev2 = pkt.history[pkt.history.length - 2];
+
+            if (prev1) {
+              pkt.t1.setAttribute("transform", `translate(${prev1.x.toFixed(1)}, ${prev1.y.toFixed(1)})`);
+              pkt.t1.setAttribute("opacity", "0.34");
+            } else {
+              pkt.t1.setAttribute("opacity", "0");
+            }
+
+            if (prev2) {
+              pkt.t2.setAttribute("transform", `translate(${prev2.x.toFixed(1)}, ${prev2.y.toFixed(1)})`);
+              pkt.t2.setAttribute("opacity", "0.16");
+            } else {
+              pkt.t2.setAttribute("opacity", "0");
+            }
+
+            pkt.history.push({ x: cx, y: cy });
+            if (pkt.history.length > 4) pkt.history.shift();
+          });
+        }
+
+        // Phase 3: Departing (sending) — doors slide shut, signal flips green, ease-in acceleration with stretching trail
+        function renderDepartingPhase(u) {
+          hideMovingPackets();
+          // Platform now holds the arrived inbound stack
+          setStacksVisibility(0, 6);
+          setSignDisplay("OUTBOUND", true);
+
+          if (u < 0.20) {
+            // Doors slide shut
+            const closeT = 1 - easeInOutCubic(u / 0.20);
+            setSignalLamp(u > 0.14); // Flips green right as doors seal
+            setTrainTrackPosition(STATION_STOP_S, closeT, false, 1, 0.25, 0);
+            tunnelGlow.setAttribute("opacity", "0.15");
+          } else {
+            // Signal is green; train accelerates out with cubic ease-in and stretching 2-frame trail
+            setSignalLamp(true);
+            const accelT = (u - 0.20) / 0.80;
+            const eased = easeInCubic(accelT);
+            const s = STATION_STOP_S + eased * 255;
+
+            // Trail stretches longer as train gains speed
+            const stretch = 1.2 + accelT * 2.4;
+            const speedAlpha = Math.sin(accelT * Math.PI) * 0.85;
+
+            setTrainTrackPosition(s, 0, true, stretch, 0.55, speedAlpha);
+            tunnelGlow.setAttribute("opacity", (0.15 * (1 - accelT)).toFixed(2));
+          }
+        }
+
+        // Phase 4: Error (the delay) — stops half-out / held, doors cycle open-shut once and stay shut, red signal, sign flashes DELAYED twice
+        function renderErrorDelayPhase(elapsedMs) {
+          hideMovingPackets();
+          setStacksVisibility(0, 6);
+          setSignalLamp(false); // Accent-red held lamp
+          tunnelGlow.setAttribute("opacity", "0.12");
+
+          // Train stopped half out of the tunnel / platform at s = 232
+          const heldS = 232;
+
+          // Doors cycle open-shut once (150ms..950ms) and stay shut
+          let doorOpen = 0;
+          if (elapsedMs > 120 && elapsedMs < 960) {
+            const dt = (elapsedMs - 120) / 840;
+            doorOpen = Math.sin(dt * Math.PI);
+          }
+
+          // Small stall jolt in the first 350ms
+          let jolt = 0;
+          if (elapsedMs < 350) {
+            const jt = elapsedMs / 350;
+            jolt = Math.sin(jt * Math.PI * 3) * 3.5 * (1 - jt);
+          }
+
+          setTrainTrackPosition(heldS + jolt, doorOpen, elapsedMs < 350, 1, 0.12, 0);
+
+          // Sign flashes "DELAYED" twice (0..900ms) then holds steady
+          let signVisible = true;
+          if (elapsedMs < 900) {
+            const flashBucket = Math.floor(elapsedMs / 150);
+            signVisible = flashBucket % 2 === 0;
+          }
+          setSignDisplay("DELAYED", signVisible);
+        }
+
+        function syncCaptionForState(stateName) {
+          const meta = STATE_META[stateName] || STATE_META["idle"];
+          if (captionEl.textContent !== meta.caption) {
+            captionEl.textContent = meta.caption;
+          }
+          if (stateName !== "working, exchanging" && sublineEl.textContent !== meta.subline) {
+            sublineEl.textContent = meta.subline;
+          }
+          if (meta.button) {
+            actionBtn.textContent = meta.button;
+            actionBtn.hidden = false;
+          } else {
+            actionBtn.hidden = true;
+          }
+        }
+
+        // Main animation loop
+        function tick(now) {
+          const elapsed = now - stateStartTime;
+
+          if (playActive) {
+            // Timed 4.1s round-trip sync cycle: arriving -> exchanging -> departing -> done
+            const totalDuration = 4100;
+            const u = Math.min(1, elapsed / totalDuration);
+
+            if (u < 0.30) {
+              syncCaptionForState("working, arriving");
+              renderArrivingPhase(u / 0.30);
+            } else if (u < 0.70) {
+              syncCaptionForState("working, exchanging");
+              renderExchangingPhase((u - 0.30) / 0.40);
+            } else if (u < 0.97) {
+              syncCaptionForState("working, departing");
+              renderDepartingPhase((u - 0.70) / 0.27);
+            } else {
+              playActive = false;
+              setState("done");
+              return;
+            }
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+
+          if (retryDeparting) {
+            // "Retry departure" recovery: signal turns green, train accelerates out from held position to done
+            const duration = 1100;
+            const u = Math.min(1, elapsed / duration);
+            setSignalLamp(true);
+            setSignDisplay("OUTBOUND", true);
+            const eased = easeInCubic(u);
+            const s = 232 + eased * 270;
+            setTrainTrackPosition(s, 0, true, 1.3 + u * 2.2, 0.55, Math.sin(u * Math.PI) * 0.85);
+
+            if (u < 1) {
+              rafId = requestAnimationFrame(tick);
+            } else {
+              retryDeparting = false;
+              setState("done");
+            }
+            return;
+          }
+
+          // Individual looping / animated states when viewed directly
+          if (currentState === "working, arriving") {
+            const u = Math.min(1, (elapsed % 2300) / 1850);
+            renderArrivingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "working, exchanging") {
+            const u = (elapsed % 2600) / 2600;
+            renderExchangingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "working, departing") {
+            const u = Math.min(1, (elapsed % 2100) / 1650);
+            renderDepartingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "error") {
+            renderErrorDelayPhase(elapsed);
+            if (elapsed < 1200) {
+              rafId = requestAnimationFrame(tick);
+            }
+          }
+        }
+
+        // Public API: setState(name)
+        function setState(name) {
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          playActive = false;
+          retryDeparting = false;
+
+          const normalized = String(name).trim().toLowerCase();
+          if (normalized.includes("arriving") || normalized.includes("receiving")) {
+            currentState = "working, arriving";
+          } else if (normalized.includes("exchanging")) {
+            currentState = "working, exchanging";
+          } else if (normalized.includes("departing") || normalized.includes("sending")) {
+            currentState = "working, departing";
+          } else if (normalized.startsWith("error") || normalized.includes("delay")) {
+            currentState = "error";
+          } else if (normalized === "done") {
+            currentState = "done";
+          } else {
+            currentState = "idle";
+          }
+
+          // Respect prefers-reduced-motion: collapse directly to static done-state pose
+          if (prefersReducedMotion()) {
+            resetVisualScene();
+            setStacksVisibility(0, 6);
+            setSignalLamp(false);
+            setSignDisplay("SYNCED", true);
+            syncCaptionForState("done");
+            return;
+          }
+
+          resetVisualScene();
+          stateStartTime = performance.now();
+          syncCaptionForState(currentState);
+
+          if (currentState === "idle") {
+            setStacksVisibility(6, 0);
+            setSignalLamp(false);
+            setSignDisplay("STANDBY", true);
+          } else if (currentState === "done") {
+            // Train gone, tunnel dark, arrived stack on platform, sign on SYNCED with time
+            setStacksVisibility(0, 6);
+            setSignalLamp(false);
+            setSignDisplay(STATE_META["done"].sign, true);
+          } else {
+            rafId = requestAnimationFrame(tick);
+          }
+        }
+
+        // Public API: setProgress(0..1)
+        // Drives the whole round trip honestly: train in, exchanged count through middle, train out at end
+        function setProgress(value) {
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          playActive = false;
+          retryDeparting = false;
+
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+
+          const p = Math.max(0, Math.min(1, Number(value) || 0));
+
+          if (p <= 0.001) {
+            setState("idle");
+          } else if (p < 0.30) {
+            currentState = "working, arriving";
+            syncCaptionForState("working, arriving");
+            renderArrivingPhase(p / 0.30);
+          } else if (p < 0.72) {
+            currentState = "working, exchanging";
+            syncCaptionForState("working, exchanging");
+            renderExchangingPhase((p - 0.30) / 0.42);
+          } else if (p < 0.995) {
+            currentState = "working, departing";
+            syncCaptionForState("working, departing");
+            renderDepartingPhase((p - 0.72) / 0.275);
+          } else {
+            setState("done");
+          }
+        }
+
+        // Public API: play()
+        // Runs a timed ~4.1-second cycle through arriving, exchanging, departing, done
+        function play() {
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+          if (rafId) cancelAnimationFrame(rafId);
+          resetVisualScene();
+          playActive = true;
+          retryDeparting = false;
+          stateStartTime = performance.now();
+          rafId = requestAnimationFrame(tick);
+        }
+
+        // Recovery action when stalled in error state
+        function retryDeparture() {
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+          if (rafId) cancelAnimationFrame(rafId);
+          playActive = false;
+          retryDeparting = true;
+          stateStartTime = performance.now();
+          captionEl.textContent = `Sending to ${cfg.toLabel}`;
+          sublineEl.textContent = `Resuming ${totalFormatted} records outbound`;
+          actionBtn.hidden = true;
+          rafId = requestAnimationFrame(tick);
+        }
+
+        // Wire contextual button inside the component caption block
+        actionBtn.addEventListener("click", () => {
+          if (currentState === "idle") {
+            play();
+          } else if (currentState === "error") {
+            retryDeparture();
+          } else if (currentState === "done") {
+            setState("idle");
+          }
+        });
+
+        // Initialize in idle state
+        setState("idle");
+
+        return {
+          setState,
+          setProgress,
+          play,
+          retryDeparture,
+          destroy() {
+            if (rafId) cancelAnimationFrame(rafId);
+            el.innerHTML = "";
+          }
+        };
+      }
+
+      // Expose globally per family convention
+      window.mountMachine = mountMachine;
+
+      // ======================================================================
+      // BOOTSTRAP: SINGLE COMPONENT VIEW OR ?demo=1 HARNESS
+      // ======================================================================
+      const appRoot = document.getElementById("app-root");
+      const toggleDemoBtn = document.getElementById("toggle-demo-btn");
+      const modeBadge = document.getElementById("mode-badge");
+      let activeInstances = [];
+
+      function clearInstances() {
+        activeInstances.forEach((inst) => inst.destroy && inst.destroy());
+        activeInstances = [];
+        appRoot.innerHTML = "";
+      }
+
+      function renderSingleView() {
+        clearInstances();
+        modeBadge.textContent = "Single Machine";
+        toggleDemoBtn.textContent = "Open 6-State Demo Harness (?demo=1)";
+
+        const wrap = document.createElement("div");
+        wrap.className = "single-stage-wrap";
+
+        const mountTarget = document.createElement("div");
+        mountTarget.style.width = "100%";
+        mountTarget.style.display = "flex";
+        mountTarget.style.justifyContent = "center";
+        wrap.appendChild(mountTarget);
+
+        const machine = mountMachine(mountTarget, {
+          machine: "subway",
+          total: 1240,
+          fromLabel: "Server A",
+          toLabel: "Archive"
+        });
+        activeInstances.push(machine);
+
+        const toolbar = document.createElement("div");
+        toolbar.className = "single-toolbar";
+
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "demo-pill active";
+        playBtn.textContent = "Play Round-Trip Sync (4.1s)";
+        playBtn.addEventListener("click", () => machine.play());
+        toolbar.appendChild(playBtn);
+
+        const stallBtn = document.createElement("button");
+        stallBtn.type = "button";
+        stallBtn.className = "demo-pill danger";
+        stallBtn.textContent = "Stall it";
+        stallBtn.addEventListener("click", () => machine.setState("error"));
+        toolbar.appendChild(stallBtn);
+
+        wrap.appendChild(toolbar);
+        appRoot.appendChild(wrap);
+      }
+
+      function renderDemoHarness() {
+        clearInstances();
+        modeBadge.textContent = "Demo Harness (?demo=1)";
+        toggleDemoBtn.textContent = "Exit Demo Harness";
+
+        // Top interactive control bar: Progress Slider + Play + Stall it
+        const sliderBar = document.createElement("div");
+        sliderBar.className = "demo-slider-bar";
+
+        const sliderGroup = document.createElement("div");
+        sliderGroup.className = "slider-group";
+
+        const sliderLabel = document.createElement("label");
+        sliderLabel.setAttribute("for", "demo-progress-range");
+        sliderLabel.textContent = "setProgress(0..1)";
+
+        const rangeInput = document.createElement("input");
+        rangeInput.id = "demo-progress-range";
+        rangeInput.type = "range";
+        rangeInput.min = "0";
+        rangeInput.max = "1";
+        rangeInput.step = "0.005";
+        rangeInput.value = "0";
+
+        const sliderVal = document.createElement("span");
+        sliderVal.className = "slider-val";
+        sliderVal.textContent = "0.00";
+
+        sliderGroup.appendChild(sliderLabel);
+        sliderGroup.appendChild(rangeInput);
+        sliderGroup.appendChild(sliderVal);
+
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "demo-controls";
+
+        const playAllBtn = document.createElement("button");
+        playAllBtn.type = "button";
+        playAllBtn.className = "demo-pill";
+        playAllBtn.textContent = "play() All Tiles";
+
+        const stallAllBtn = document.createElement("button");
+        stallAllBtn.type = "button";
+        stallAllBtn.className = "demo-pill danger";
+        stallAllBtn.textContent = "Stall it (Trigger Delay)";
+
+        actionGroup.appendChild(playAllBtn);
+        actionGroup.appendChild(stallAllBtn);
+
+        sliderBar.appendChild(sliderGroup);
+        sliderBar.appendChild(actionGroup);
+        appRoot.appendChild(sliderBar);
+
+        // 6-State Labeled Grid
+        const grid = document.createElement("div");
+        grid.className = "demo-grid";
+        appRoot.appendChild(grid);
+
+        const sixStates = [
+          { id: "idle", label: "1. idle" },
+          { id: "working, arriving", label: "2. working, arriving" },
+          { id: "working, exchanging", label: "3. working, exchanging" },
+          { id: "working, departing", label: "4. working, departing" },
+          { id: "done", label: "5. done" },
+          { id: "error", label: "6. error (the delay)" }
+        ];
+
+        const tileControllers = [];
+
+        sixStates.forEach((st) => {
+          const tile = document.createElement("div");
+          tile.className = "demo-tile";
+
+          const head = document.createElement("div");
+          head.className = "demo-tile-head";
+
+          const titleSpan = document.createElement("span");
+          titleSpan.textContent = st.label;
+
+          const stateBtn = document.createElement("button");
+          stateBtn.type = "button";
+          stateBtn.className = "demo-pill";
+          stateBtn.textContent = `setState("${st.id}")`;
+
+          head.appendChild(titleSpan);
+          head.appendChild(stateBtn);
+          tile.appendChild(head);
+
+          const mountNode = document.createElement("div");
+          mountNode.style.width = "100%";
+          mountNode.style.display = "flex";
+          mountNode.style.justifyContent = "center";
+          tile.appendChild(mountNode);
+
+          const inst = mountMachine(mountNode, {
+            machine: "subway",
+            total: 1240,
+            fromLabel: "Server A",
+            toLabel: "Archive"
+          });
+          inst.setState(st.id);
+
+          stateBtn.addEventListener("click", () => {
+            inst.setState(st.id);
+          });
+
+          activeInstances.push(inst);
+          tileControllers.push({ inst, defaultState: st.id });
+          grid.appendChild(tile);
+        });
+
+        rangeInput.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value);
+          sliderVal.textContent = v.toFixed(2);
+          tileControllers.forEach(({ inst }) => inst.setProgress(v));
+        });
+
+        playAllBtn.addEventListener("click", () => {
+          tileControllers.forEach(({ inst }) => inst.play());
+        });
+
+        stallAllBtn.addEventListener("click", () => {
+          tileControllers.forEach(({ inst }) => inst.setState("error"));
+        });
+      }
+
+      let isDemoMode = new URLSearchParams(window.location.search).get("demo") === "1";
+
+      function syncMode() {
+        if (isDemoMode) {
+          renderDemoHarness();
+        } else {
+          renderSingleView();
+        }
+      }
+
+      toggleDemoBtn.addEventListener("click", () => {
+        isDemoMode = !isDemoMode;
+        const url = new URL(window.location.href);
+        if (isDemoMode) {
+          url.searchParams.set("demo", "1");
+        } else {
+          url.searchParams.delete("demo");
+        }
+        window.history.replaceState({}, "", url);
+        syncMode();
+      });
+
+      syncMode();
+    })();
+  </script>
+</body>
+</html>
