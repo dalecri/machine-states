@@ -32,7 +32,6 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
 .machine-btn[hidden]{display:none}
 .m-tag{font-size:8px;font-weight:700;fill:var(--machine-dark)}
 .m-read{font-size:7px;font-weight:700;fill:var(--paper);letter-spacing:.3px}
-.m-stub{font-size:10px;fill:var(--muted)}
 
 /* page + demo */
 .single{padding:48px 16px}
@@ -40,10 +39,9 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
 .hint{text-align:center;margin-top:28px}
 .mnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:6px auto 26px;max-width:680px}
 .mnav-t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-right:2px}
-.mnav a,.mnav .mnav-off{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
+.mnav a{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
 .mnav a:hover{border-color:var(--muted)}
 .mnav a[aria-current]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
-.mnav .mnav-off{color:var(--muted);border-style:dashed}
 .link{font:inherit;font-size:12px;color:var(--muted);background:none;border:0;text-decoration:underline;cursor:pointer}
 .demo{max-width:1040px;margin:0 auto;padding:28px 16px 64px}
 .demo h1{font-size:20px;margin:0 0 4px}
@@ -68,8 +66,8 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
 /*
   HOW TO ADD A MACHINE
   --------------------
-  1. Add an entry to MACHINES below. stub(name) at the end of the machines section is the starting point;
-     press, conveyor and sealer are full examples (box() and cyl() draw iso solids).
+  1. Add an entry to MACHINES below. Copy the smallest one that is close (sealer or distiller);
+     box() and cyl() draw iso solids, floorShadow() and puff() are shared.
   2. A machine only owns these:
        viewBox              SVG viewBox string (keep the same aspect if you want layouts to stay put)
        draw(pose, ctx)      returns SVG markup for ONE frame. Pure: no DOM, no timers.
@@ -81,9 +79,11 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
        phases               optional [{ name, end }] naming your working states (default lowering/pressing/lifting);
                             the demo grid and state buttons build themselves from this list
        pose.tremble         truthy keeps the frame loop alive for idle-time motion (needle shake, beam flicker)
+       pose.alive           same, but also in static states (the coffee steam keeps rising when done)
   3. Leave alone: mountMachine, setState, setProgress, play, the rAF loop, the trail buffer,
      reduced-motion handling and the caption block. None of them know what a press is.
-  Copy supports {file} {from} {to} {pct} placeholders, filled from the mount options.
+  Copy supports {file} {from} {to} {pct} {fromFmt} {toFmt}, filled from the mount options
+  (fileName, fromSize, toSize, and the optional fromFormat / toFormat).
 */
 (function(){
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -248,12 +248,6 @@ MACHINES.press = {
   confetti(P,ctx){ return puff(P(0,0,this.geo.plinth+this.geo.stackFlat+6), ctx.doneAge); }
 };
 
-/* stubs: right viewBox, empty group, the swap point is draw() */
-function stub(name){
-  return {viewBox:'30 0 260 300', copy:GENERIC_COPY,
-    poseAt:()=>({}), staticPose:()=>({}),
-    draw:()=>`<g data-machine="${name}"><rect x="62" y="40" width="196" height="220" rx="14" style="fill:none;stroke:var(--muted);stroke-dasharray:4 5"/><text x="160" y="154" text-anchor="middle" class="m-stub">${name}: draw() goes here</text></g>`};
-}
 /* ---------- conveyor: uploads, sends, exports ---------- */
 MACHINES.conveyor = {
   viewBox:'30 0 260 300',
@@ -437,6 +431,389 @@ MACHINES.sealer = {
   }
 };
 
+/* ---------- washer: cleaning up, optimizing, stripping hidden data ---------- */
+MACHINES.washer = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:206},
+  geo:{fy:36, cz:58, r:34, h:124},
+  phases:[{name:'filling',end:.25},{name:'washing',end:.7},{name:'spinning',end:1}],
+  copy:{
+    idle:    {cap:'Needs a clean-up', sub:'{file} is carrying extra weight at {from}', btn:'Clean up', action:'start'},
+    filling: {cap:'Filling the drum', sub:'Soaking {file}'},
+    washing: {cap:'Scrubbing', sub:'Stripping old edits and hidden data'},
+    spinning:{cap:'Spin cycle', sub:'Wringing {file} down to {to}'},
+    done:    {cap:'Fresh and clean', sub:'{file} is {pct} lighter at {to}', btn:'Download', action:'next'},
+    error:   {cap:'Clean-up stopped', sub:'{file} is open somewhere else. Nothing was removed.', btn:'Try again', action:'retry'}
+  },
+
+  poseAt(p,o){
+    const base={water:0, slosh:0, drum:0, suds:0, shake:0, fling:0, dirt:1, knob:-110, lcd:'READY', tremble:false};
+    if(p<.25){
+      const t=p/.25;
+      return Object.assign(base,{water:easeOut(t), drum:.25*Math.sin(Math.PI*t), suds:t, knob:-55, lcd:'FILL', tremble:true});
+    }
+    if(p<.7){
+      const t=(p-.25)/.45, e=smooth(t);
+      return Object.assign(base,{water:1, slosh:Math.sin(t*Math.PI*5)*(.6+.4*Math.sin(Math.PI*t)), drum:4*Math.PI*e,
+        suds:1, dirt:1-e, knob:0, lcd:'WASH', tremble:true});
+    }
+    const t=clamp((p-.7)/.3), e=smooth(t);   /* drum ends on a multiple of 2pi, so sheets settle back where they started */
+    return Object.assign(base,{water:1-easeIn(clamp(t/.45)), drum:4*Math.PI+14*Math.PI*e, suds:1-clamp(t*2.2),
+      shake:Math.sin(Math.PI*t), fling:Math.sin(Math.PI*clamp(t*1.15)), dirt:0, knob:55, lcd:'SPIN', tremble:t<.97});
+  },
+  staticPose(name,o){
+    if(name==='done')  return Object.assign(this.poseAt(1,o),{shake:0, fling:0, tremble:false, knob:110, lcd:'CLEAN'});
+    if(name==='error') return Object.assign(this.poseAt(.25+.45*.4,o),{slosh:0, tremble:false, error:true, lcd:'ERR'});
+    return Object.assign(this.poseAt(0,o),{tremble:false, knob:-110, lcd:'READY'});
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark', id=ctx.uid;
+    const Q=(u,v)=>P(u,g.fy,v);                                       /* point on the front face */
+    const ring=(r,cu=0,cv=g.cz,n=40)=>Array.from({length:n},(_,i)=>{const a=i/n*2*Math.PI; return Q(cu+r*Math.cos(a),cv+r*Math.sin(a));});
+    const live=!REDUCED&&p.tremble, sh=live?p.shake:0;
+    const dx=sh*2.4*Math.sin(ctx.now/17), dy=sh*1.3*Math.sin(ctx.now/29);
+    let s=floorShadow(id,this.origin.cx,this.origin.cy+4,118,62)+`<g transform="translate(${f1(dx)} ${f1(dy)})">`;
+    s+=box(P,-50,-g.fy,0,100,2*g.fy,g.h,L,{top:lift(L,25)});
+    /* control band: LCD lies on the face via a skew matrix, knob shows the cycle */
+    s+=poly([Q(-48,100),Q(48,100),Q(48,120),Q(-48,120)],lift(L,18),shade(L,28));
+    s+=poly([Q(-42,104),Q(8,104),Q(8,116),Q(-42,116)],'var(--machine-dark)',p.error?'var(--accent)':lift(D,25));
+    const c=Q(-17,110);
+    s+=`<text transform="matrix(${C30.toFixed(3)} .5 0 1 ${f1(c[0])} ${f1(c[1])})" x="0" y="2.5" text-anchor="middle" class="m-read">${p.lcd}</text>`;
+    s+=poly(ring(6,32,110,24),'var(--paper)','var(--machine-dark)');
+    const k=(90-p.knob)*Math.PI/180;
+    s+=`<polyline points="${pts([Q(32,110),Q(32+4.6*Math.cos(k),110+4.6*Math.sin(k))])}" style="fill:none;stroke:var(--machine-dark);stroke-width:1.6"/>`;
+    /* porthole */
+    s+=poly(ring(g.r+6),'var(--machine-dark)',shade(D,40));
+    s+=`<clipPath id="wcl${id}"><polygon points="${pts(ring(g.r))}"/></clipPath><g clip-path="url(#wcl${id})">`;
+    s+=poly(ring(g.r+1),shade(L,38),'none');
+    for(let i=0;i<3;i++){                                              /* drum lifters show the spin */
+      const a=p.drum+i*2*Math.PI/3+Math.PI/6;
+      s+=poly(ring(2.6,(g.r-1.5)*Math.cos(a),g.cz+(g.r-1.5)*Math.sin(a),10),shade(L,22),'none');
+    }
+    const floor=g.cz-g.r, lv=floor+(g.r+4)*p.water, sl=p.slosh*5*p.water;
+    if(p.water>.01){
+      s+=`<polygon points="${pts([Q(-g.r-2,lv+sl),Q(g.r+2,lv-sl),Q(g.r+2,floor-2),Q(-g.r-2,floor-2)])}" style="fill:var(--plate);stroke:none" opacity=".6"/>`;
+      s+=`<polyline points="${pts([Q(-g.r-2,lv+sl),Q(g.r+2,lv-sl)])}" style="fill:none;stroke:${lift('--plate',35)};stroke-width:1.2"/>`;
+    }
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.drum-p.drum)>.06) s+=`<g opacity="${i?.1:.22}">${this.sheets(Q,t)}</g>`;
+    }
+    s+=this.sheets(Q,p);
+    if(p.suds*p.water>.02) for(let i=0;i<7;i++){
+      const ph=((live?ctx.now/1600:0)+i/7)%1, q=Q(-20+i*6.5+2*Math.sin(ph*7+i), floor+3+ph*(lv-floor-1));
+      s+=`<circle cx="${f1(q[0])}" cy="${f1(q[1])}" r="${(1.4+(i%3)*.7).toFixed(1)}" style="fill:var(--paper);stroke:var(--plate)" opacity="${(.85*p.suds*p.water*(1-ph*.4)).toFixed(2)}"/>`;
+    }
+    if(p.error) s+=`<polygon points="${pts(ring(g.r))}" style="fill:var(--accent);stroke:none" opacity=".16"/>`;
+    s+=`<polyline points="${pts(Array.from({length:8},(_,i)=>{const a=(100+i*8)*Math.PI/180; return Q((g.r-5)*Math.cos(a),g.cz+(g.r-5)*Math.sin(a));}))}" style="fill:none;stroke:var(--paper);stroke-width:2" opacity=".55"/>`;
+    s+='</g>'+`<polygon points="${pts(ring(g.r))}" style="fill:none;stroke:${shade(D,10)};stroke-width:1.4"/>`;
+    s+=poly([Q(g.r+7,g.cz-7),Q(g.r+10,g.cz-7),Q(g.r+10,g.cz+7),Q(g.r+7,g.cz+7)],lift(D,20),shade(D,40));   /* handle */
+    return s+'</g>'+puff(P(0,0,g.h+4), ctx.doneAge);
+  },
+
+  /* three file sheets tumbling with the drum; smudges fade as dirt goes to 0 */
+  sheets(Q,q){
+    const g=this.geo; let s='';
+    [-Math.PI/2-.75,-Math.PI/2,-Math.PI/2+.75].forEach((b,i)=>{
+      const a=b+q.drum, rad=18+7*q.fling, cu=rad*Math.cos(a), cv=g.cz+rad*Math.sin(a), rot=a+i, co=Math.cos(rot), si=Math.sin(rot);
+      const C=(x,y)=>Q(cu+x*co-y*si, cv+x*si+y*co);
+      s+=poly([C(-7.5,-10),C(7.5,-10),C(7.5,10),C(-7.5,10)],'var(--paper)',shade('--machine-light',35));
+      s+=`<polyline points="${pts([C(-5,6.5),C(5,6.5)])}" style="fill:none;stroke:var(--paper-accent);stroke-width:1.2"/>`;
+      if(q.dirt>.02) [C(-2.5,-1),C(3,-5.5)].forEach(d=>{ s+=`<circle cx="${f1(d[0])}" cy="${f1(d[1])}" r="1.8" style="fill:var(--muted)" opacity="${(q.dirt*.8).toFixed(2)}"/>`; });
+    });
+    return s;
+  }
+};
+
+/* ---------- printer: exporting, generating, building ---------- */
+MACHINES.printer = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:208},
+  geo:{bed:21, x0:-26, x1:26, y0:-20, d:40, lh:4, N:12, parkX:36, parkZ:110},
+  phases:[{name:'heating',end:.18},{name:'printing',end:.82},{name:'cooling',end:1}],
+  copy:{
+    idle:    {cap:'Ready to export', sub:'{file}, {from} of source', btn:'Export', action:'start'},
+    heating: {cap:'Warming up', sub:'Heating the nozzle for {file}'},
+    printing:{cap:'Building it layer by layer', sub:'Laying down {file}'},
+    cooling: {cap:'Cooling off', sub:'Letting the last layer set'},
+    done:    {cap:'Exported', sub:'{file} is ready at {to}', btn:'Download', action:'next'},
+    error:   {cap:'Export failed', sub:'A layer didn’t stick. {file} is untouched.', btn:'Try again', action:'retry'}
+  },
+  lcd(n){ return 'L '+String(n).padStart(2,'0')+'/'+this.geo.N; },
+  topZ(layer){ return this.geo.bed+layer*this.geo.lh+10; },           /* gantry z that puts the nozzle on a layer's top */
+
+  poseAt(p,o){
+    const g=this.geo;
+    if(p<.18){                                   /* travel from park to the first layer while heating */
+      const t=p/.18, e=smooth(t);
+      return {hx:g.parkX+(g.x0-g.parkX)*e, gz:g.parkZ+(this.topZ(1)-g.parkZ)*e, L:0, part:null, heat:t, lcd:this.lcd(0), tremble:true};
+    }
+    if(p<.82){                                   /* serpentine: even layers go right, odd go left, then step up */
+      const q=(p-.18)/.64*g.N, L=Math.min(g.N-1,Math.floor(q)), f=q-L, ef=smooth(f), even=L%2===0;
+      const hx=even ? g.x0+(g.x1-g.x0)*ef : g.x1-(g.x1-g.x0)*ef;
+      return {hx, gz:this.topZ(L+1+smooth(clamp((f-.88)/.12))), L, part:even?[g.x0,hx]:[hx,g.x1], heat:1, lcd:this.lcd(L+1), tremble:true};
+    }
+    const t=clamp((p-.82)/.18), e=smooth(t), z0=this.topZ(g.N+1);
+    return {hx:g.x0+(g.parkX-g.x0)*e, gz:z0+(g.parkZ-z0)*e, L:g.N, part:null, heat:1-t, lcd:this.lcd(g.N), tremble:t<.5};
+  },
+  staticPose(name,o){
+    const g=this.geo;
+    if(name==='done')  return Object.assign(this.poseAt(1,o),{tremble:false, lcd:'DONE'});
+    if(name==='error') return Object.assign(this.poseAt(.18+.64*.55,o),{tremble:false, error:true, heat:0, lcd:'ERR'});
+    return {hx:g.parkX, gz:g.parkZ, L:0, part:null, heat:0, lcd:'READY'};
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark';
+    const Q=(u,v)=>P(u,50,v);                                          /* point on the base's front face */
+    let s=floorShadow(ctx.uid,this.origin.cx,this.origin.cy+4,128,66);
+    s+=box(P,-60,-50,0,120,100,18,L,{top:lift(L,25)});
+    s+=box(P,-45,-38,18,90,76,3,'--plate',{top:lift('--plate',18)});
+    const c=Q(-28,9);
+    s+=poly([Q(-48,4),Q(-8,4),Q(-8,14),Q(-48,14)],'var(--machine-dark)',p.error?'var(--accent)':lift(D,25));
+    s+=`<text transform="matrix(${C30.toFixed(3)} .5 0 1 ${f1(c[0])} ${f1(c[1])})" x="0" y="2.5" text-anchor="middle" class="m-read">${p.lcd}</text>`;
+    s+=box(P,-58,-46,18,8,8,118,L)+box(P,50,-46,18,8,8,118,L);              /* uprights */
+    s+=box(P,-60,-48,136,120,12,6,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    s+=box(P,-58,-45,p.gz+2,116,6,6,L);                                      /* x rail rides the uprights */
+    s+=box(P,p.hx-9,-49,p.gz,18,16,12,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    s+=this.part(P,p);
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.hx-p.hx)+Math.abs(t.gz-p.gz)>.8) s+=`<g opacity="${i?.1:.22}">${this.head(P,t,ctx)}</g>`;
+    }
+    s+=this.head(P,p,ctx);
+    return s+puff(P(0,0,g.bed+g.N*g.lh+4), ctx.doneAge);
+  },
+
+  /* finished layers in paper with pink every third line, the live layer hot pink */
+  part(P,p){
+    const g=this.geo, line=shade('--machine-light',30), h=p.L*g.lh, y1=g.y0+g.d;
+    let s='';
+    if(h>0){
+      s+=box(P,g.x0,g.y0,g.bed,g.x1-g.x0,g.d,h,'--paper',{front:shade('--paper',4),side:shade('--paper',9),stroke:line});
+      for(let i=1;i<p.L;i++){
+        const z=g.bed+i*g.lh, pink=i%3===0;
+        s+=`<polyline points="${pts([P(g.x0,y1,z),P(g.x1,y1,z),P(g.x1,g.y0,z)])}" style="fill:none;stroke:${pink?'var(--paper-accent)':line};stroke-width:${pink?1.4:.6}"/>`;
+      }
+    }
+    if(p.part && p.part[1]-p.part[0]>.5){
+      const v=p.error?'--accent':'--paper-accent';
+      s+=box(P,p.part[0],g.y0,g.bed+h,p.part[1]-p.part[0],g.d,g.lh,v,{top:lift(v,20),stroke:shade(v,30)});
+    }
+    return s;
+  },
+  /* arm, hot end, fan and nozzle; the glow at the tip tracks heat */
+  head(P,q,ctx){
+    const D='--machine-dark', x=q.hx, z=q.gz;
+    let s=box(P,x-3,-33,z+4,6,27,5,'--machine-light');
+    s+=box(P,x-8,-6,z-2,16,16,14,D,{dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)});
+    s+=poly(Array.from({length:16},(_,i)=>{const a=i/16*2*Math.PI; return P(x+4.5*Math.cos(a),10,z+5+4.5*Math.sin(a));}),'var(--plate)',shade('--plate',30));
+    s+=box(P,x-2,0,z-10,4,4,8,'--machine-light');
+    if(q.heat>.02){
+      const t=P(x,2,z-10), fl=q.tremble&&!REDUCED?.15*Math.sin(ctx.now/31):0;
+      s+=`<circle cx="${f1(t[0])}" cy="${f1(t[1])}" r="${(1.5+2*q.heat).toFixed(1)}" style="fill:var(--paper-accent)" opacity="${clamp(.75*q.heat+fl).toFixed(2)}"/>`;
+    }
+    return s;
+  }
+};
+
+/* ---------- typewriter: converting formats, retyped line by line ---------- */
+MACHINES.typewriter = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:198},
+  geo:{lh:9, top:70, n:6, margin:28, oldL:[50,30,44,22,52,38], newL:[30,56,56,48,56,34]},
+  phases:[{name:'clearing',end:.2},{name:'typing',end:.85},{name:'ejecting',end:1}],
+  copy:{
+    idle:    {cap:'Wrong format', sub:'{file} is a {fromFmt}. You need a {toFmt}.', btn:'Convert', action:'start'},
+    clearing:{cap:'Rolling in a fresh sheet', sub:'Clearing out the old {fromFmt} layout'},
+    typing:  {cap:'Retyping it', sub:'Setting {file} line by line as {toFmt}'},
+    ejecting:{cap:'Pulling the page', sub:'Last line set'},
+    done:    {cap:'Converted', sub:'{file} is now a {toFmt}, {to}', btn:'Download', action:'next'},
+    error:   {cap:'Conversion jammed', sub:'{file} uses a font we can’t read. Nothing was changed.', btn:'Try again', action:'retry'}
+  },
+  scrollAt(i){ return 50-this.geo.top+i*this.geo.lh; },              /* paper offset that puts line i at the typing point */
+
+  poseAt(p,o){
+    const g=this.geo, end=this.scrollAt(g.n)+14, base={shift:0, scroll:end, lines:0, cur:0, oldA:0, fmt:1, key:-1, tremble:false};
+    if(p<.2){                                    /* sheet rolls back in, old layout fades, carriage to the margin */
+      const e=smooth(p/.2);
+      return Object.assign(base,{shift:g.margin*e, scroll:end+(this.scrollAt(0)-end)*e, oldA:1-e, fmt:e<.5?0:1, tremble:true});
+    }
+    if(p<.85){
+      const q=(p-.2)/.65*g.n, i=Math.min(g.n-1,Math.floor(q)), f=q-i, len=g.newL[i];
+      if(f<.82){                                 /* one character at a time: the carriage steps, a key dips */
+        const chars=Math.floor(len*f/.82/4), cur=chars*4;
+        return Object.assign(base,{shift:g.margin-cur, scroll:this.scrollAt(i), lines:i, cur, key:(chars*7+i*3)%24, tremble:true});
+      }
+      const r=smooth((f-.82)/.18);               /* carriage return and line feed in one eased move */
+      return Object.assign(base,{shift:g.margin-len+len*r, scroll:this.scrollAt(i)+g.lh*r, lines:i, cur:len, tremble:true});
+    }
+    const e=smooth(clamp((p-.85)/.15));
+    return Object.assign(base,{shift:g.margin*(1-e), scroll:this.scrollAt(g.n)+14*e, lines:g.n});
+  },
+  staticPose(name,o){
+    if(name==='idle')  return Object.assign(this.poseAt(1,o),{oldA:1, lines:0, fmt:0});
+    if(name==='error') return Object.assign(this.poseAt(.2+.65*.45,o),{tremble:false, error:true, key:-1});
+    return this.poseAt(1,o);
+  },
+
+  draw(p,ctx){
+    const P=isoFn(this.origin), g=this.geo, L='--machine-light', D='--machine-dark', dk={dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)};
+    const Q=(u,v)=>P(u+p.shift,-9.5,v+p.scroll), vb=Math.max(0,30-p.scroll), topV=g.top+10;
+    let s=floorShadow(ctx.uid,this.origin.cx,this.origin.cy+4,124,64);
+    s+=poly([Q(-32,vb),Q(32,vb),Q(32,topV),Q(-32,topV)],'var(--paper)',shade(L,30));
+    const bar=(i,len,fill,op,th=2.4)=>{
+      const v=g.top-i*g.lh;
+      if(v+p.scroll<31||len<.5) return '';
+      return `<polygon points="${pts([Q(-g.margin,v-th/2),Q(-g.margin+len,v-th/2),Q(-g.margin+len,v+th/2),Q(-g.margin,v+th/2)])}" style="fill:${fill};stroke:none" opacity="${op}"/>`;
+    };
+    if(p.oldA>.02) g.oldL.forEach((l,i)=>{ s+=bar(i,l,'var(--muted)',p.oldA.toFixed(2)); });
+    for(let i=0;i<=Math.min(p.lines,g.n-1);i++){              /* new layout: pink heading, even body lines */
+      const full=i<p.lines;
+      s+=bar(i, full?g.newL[i]:p.cur, p.error&&!full?'var(--accent)':i===0?'var(--paper-accent)':'var(--machine-dark)', 1, i===0?3.6:2.4);
+    }
+    const fm=p.fmt?ctx.opts.toFormat:ctx.opts.fromFormat;
+    if(fm){ const a=Q(22,topV+8);
+      s+=`<g transform="translate(${f1(a[0])} ${f1(a[1])})"><rect x="-20" y="-8" width="40" height="16" rx="8" style="fill:var(--paper-accent);stroke:${shade('--paper-accent',28)}"/><text x="0" y="3" text-anchor="middle" class="m-tag">${fm}</text></g>`; }
+    const car=x=>box(P,x-53,-14,30,7,8,8,'--plate')+box(P,x-46,-16,26,92,12,14,D,dk)+box(P,x+46,-14,30,7,8,8,'--plate');
+    for(let i=ctx.trail.length-1;i>=0;i--){
+      const t=ctx.trail[i];
+      if(Math.abs(t.shift-p.shift)>.8) s+=`<g opacity="${i?.1:.22}">${car(t.shift)}</g>`;
+    }
+    s+=car(p.shift)+box(P,-55,-4,0,110,50,26,L,{top:lift(L,25)});
+    for(let k=0;k<24;k++) s+=box(P,-44+(k%8)*11,6+Math.floor(k/8)*12,k===p.key?23.5:26,8,8,3,D,Object.assign({},dk,{top:lift(D,22)}));
+    return s+puff(P(0,-10,topV+p.scroll+4), ctx.doneAge);
+  }
+};
+
+/* ---------- distiller: converting formats; the beaker level is the progress bar ---------- */
+MACHINES.distiller = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:210},
+  phases:[{name:'heating',end:.15},{name:'distilling',end:.88},{name:'settling',end:1}],
+  copy:{
+    idle:      {cap:'Needs a new format', sub:'{file} is a {fromFmt}. Distill it into {toFmt}.', btn:'Convert', action:'start'},
+    heating:   {cap:'Heating it up', sub:'Bringing the {fromFmt} to a boil'},
+    distilling:{cap:'Distilling', sub:'{fromFmt} in, {toFmt} out'},
+    settling:  {cap:'Letting it settle', sub:'Last drops of {file}'},
+    done:      {cap:'Distilled', sub:'{file} is now a {toFmt}, {to}', btn:'Download', action:'next'},
+    error:     {cap:'The batch went cloudy', sub:'{file} has pages we couldn’t separate. Nothing was changed.', btn:'Try again', action:'retry'}
+  },
+  poseAt(p,o){
+    const off={drop:-1, vapor:-1};
+    if(p<.15){ const t=p/.15; return Object.assign(off,{heat:smooth(t), boil:.6*t, src:1, out:0, tremble:true}); }
+    if(p<.88){ const t=(p-.15)/.73;              /* levels track progress; drops fall nine times */
+      return {heat:1, boil:1, src:1-.8*t, out:t, drop:(t*9)%1, vapor:(t*6)%1, tremble:true}; }
+    const t=clamp((p-.88)/.12);
+    return Object.assign(off,{heat:1-smooth(t), boil:1-t, src:.2, out:1, drop:t<.5?t*2:-1, tremble:t<.6});
+  },
+  staticPose(name,o){
+    const still={heat:0, boil:0, drop:-1, vapor:-1, tremble:false};
+    if(name==='done')  return Object.assign(this.poseAt(1,o),still);
+    if(name==='error') return Object.assign(this.poseAt(.15+.73*.5,o),still,{error:true});
+    return Object.assign(this.poseAt(0,o),still);
+  },
+  draw(p,ctx){
+    const P=isoFn(this.origin), L='--machine-light', D='--machine-dark', id=ctx.uid, live=p.tremble&&!REDUCED, o=ctx.opts;
+    const c=P(-48,0,64), R=26, burner=P(-48,0,24), bb=P(48,0,10), surfZ=q=>13+40*q.out;
+    const S=[c[0],c[1]-R-16], T=[bb[0]-2,bb[1]-78], C1=[S[0],S[1]-34], C2=[T[0],S[1]-34];
+    const tag=(x,y,t)=>t?`<g transform="translate(${f1(x)} ${f1(y)})"><rect x="-18" y="-8" width="36" height="16" rx="8" style="fill:var(--paper-accent);stroke:${shade('--paper-accent',28)}"/><text x="0" y="3" text-anchor="middle" class="m-tag">${t}</text></g>`:'';
+    let s=floorShadow(id,this.origin.cx,this.origin.cy+4,124,60)+box(P,-80,-28,0,160,56,10,L,{top:lift(L,25)});
+    s+=`<path d="M${f1(c[0]-30)} ${f1(burner[1]+2)} L${f1(c[0]-30)} ${f1(c[1])} L${f1(c[0]-R)} ${f1(c[1])}" style="fill:none;stroke:${shade(L,30)};stroke-width:2"/>`;   /* ring stand */
+    s+=cyl(P,-48,0,10,14,11,D,{dark:true,side:`var(${D})`,top:lift(D,16)});
+    if(p.heat>.02){ const fl=live?1+.14*Math.sin(ctx.now/40):1, h=16*p.heat*fl, b=burner;
+      s+=`<path d="M${f1(b[0]-5*p.heat)} ${f1(b[1])} Q${f1(b[0])} ${f1(b[1]-h*1.4)} ${f1(b[0]+5*p.heat)} ${f1(b[1])} Z" style="fill:var(--paper-accent);stroke:none"/>`; }
+    /* source flask: pink liquid that boils down, bubbles while hot */
+    const surf=c[1]+R-2*R*.72*p.src;
+    s+=`<clipPath id="dcl${id}"><circle cx="${f1(c[0])}" cy="${f1(c[1])}" r="${R-2.5}"/></clipPath><g clip-path="url(#dcl${id})"><rect x="${f1(c[0]-R)}" y="${f1(surf)}" width="${2*R}" height="${2*R}" style="fill:var(--paper-accent)"/>`;
+    if(p.boil>.02) for(let i=0;i<6;i++){ const ph=((live?ctx.now/900:0)+i/6)%1;
+      s+=`<circle cx="${f1(c[0]-14+i*5.5+2*Math.sin(ph*6+i))}" cy="${f1(c[1]+R-4-ph*(c[1]+R-4-surf))}" r="${(1.4+(i%3)*.6).toFixed(1)}" style="fill:var(--paper)" opacity="${(.8*p.boil).toFixed(2)}"/>`; }
+    s+=`</g><circle cx="${f1(c[0])}" cy="${f1(c[1])}" r="${R}" style="fill:none;stroke:${shade(D,10)};stroke-width:1.6"/>`;
+    s+=`<rect x="${f1(c[0]-6)}" y="${f1(S[1])}" width="12" height="18" rx="2" style="fill:var(--paper);stroke:${shade(D,10)};stroke-width:1.6"/>`;
+    /* gooseneck; vapor beads ride it as a cubic bezier */
+    const tube=`M${f1(S[0])} ${f1(S[1])} C${f1(C1[0])} ${f1(C1[1])} ${f1(C2[0])} ${f1(C2[1])} ${f1(T[0])} ${f1(T[1])}`;
+    s+=`<path d="${tube}" style="fill:none;stroke:${shade(L,30)};stroke-width:7"/><path d="${tube}" style="fill:none;stroke:var(--machine-light);stroke-width:4.5"/>`;
+    if(p.vapor>=0) for(let k=0;k<3;k++){ const t=(p.vapor+k/3)%1, u=1-t, bz=i=>u*u*u*S[i]+3*u*u*t*C1[i]+3*u*t*t*C2[i]+t*t*t*T[i];
+      s+=`<circle cx="${f1(bz(0))}" cy="${f1(bz(1))}" r="1.8" style="fill:var(${t<.5?'--paper-accent':'--plate'})"/>`; }
+    /* receiving beaker: blue liquid rises with progress; ticks make it read as a gauge */
+    if(p.out>.02) s+=cyl(P,48,0,11,surfZ(p)-11,14.5,'--plate',{top:lift('--plate',20),stroke:'none'});
+    if(p.error) s+=cyl(P,48,0,11,surfZ(p)-11,14.5,'--accent',{stroke:'none'}).replace(/<path /,'<path opacity=".3" ').replace(/<ellipse /,'<ellipse opacity=".3" ');
+    for(let i=ctx.trail.length-1;i>=0;i--){ const t=ctx.trail[i];
+      if(t.drop>=0&&Math.abs(t.drop-p.drop)>.02) s+=this.drip(P(48,0,surfZ(t)),T,t.drop,i?.1:.22); }
+    if(p.drop>=0) s+=this.drip(P(48,0,surfZ(p)),T,p.drop,1);
+    s+=cyl(P,48,0,10,46,16,D,{side:'none',top:'none',stroke:shade(D,10)});
+    for(let k=1;k<=4;k++){ const y=P(48,0,10+k*10)[1]+11.3; s+=`<line x1="${f1(bb[0]-15)}" y1="${f1(y)}" x2="${f1(bb[0]-9)}" y2="${f1(y)}" style="stroke:var(--muted)"/>`; }
+    s+=tag(c[0],c[1]+4,o.fromFormat)+tag(bb[0]+36,bb[1]-30,o.toFormat);
+    return s+puff([bb[0],bb[1]-50], ctx.doneAge);
+  },
+  drip(surf,T,d,op){ const y=T[1]+3+(surf[1]-T[1]-3)*easeIn(d);
+    return `<ellipse cx="${f1(T[0])}" cy="${f1(y)}" rx="2" ry="2.8" style="fill:var(--plate);stroke:${shade('--plate',30)}" opacity="${op}"/>`; }
+};
+
+/* ---------- coffee: generating; the mug is the progress bar, the steam never stops ---------- */
+MACHINES.coffee = {
+  viewBox:'30 0 260 300',
+  origin:{cx:160, cy:200},
+  phases:[{name:'heating',end:.2},{name:'brewing',end:.85},{name:'steeping',end:1}],
+  copy:{
+    idle:    {cap:'Ready when you are', sub:'Start a fresh batch of {file}', btn:'Generate', action:'start'},
+    heating: {cap:'Warming up', sub:'Heating the water'},
+    brewing: {cap:'Brewing', sub:'Generating {file} drop by drop'},
+    steeping:{cap:'Almost there', sub:'Letting it steep'},
+    done:    {cap:'Fresh batch ready', sub:'{file} is ready at {to}', btn:'Open', action:'next'},
+    error:   {cap:'The pot ran dry', sub:'Generation stopped partway. Nothing was saved.', btn:'Try again', action:'retry'}
+  },
+  poseAt(p,o){
+    if(p<.2){ const t=p/.2; return {heat:smooth(t), tank:1, mug:0, stream:0, drip:-1, steam:0, boil:t, tremble:true}; }
+    if(p<.85){ const t=(p-.2)/.65, st=clamp(t/.06)*clamp((.95-t)/.1);
+      return {heat:1, tank:1-.85*t, mug:t, stream:st, drip:st<.5&&t>.5?(t*14)%1:-1, steam:.7*t, boil:1, tremble:true}; }
+    const t=clamp((p-.85)/.15);
+    return {heat:1-.7*t, tank:.15, mug:1, stream:0, drip:-1, steam:.7+.3*t, boil:1-t, tremble:true};
+  },
+  staticPose(name,o){
+    if(name==='done')  return {heat:.3, tank:.15, mug:1, stream:0, drip:-1, steam:1, boil:0, alive:true};
+    if(name==='error') return Object.assign(this.poseAt(.2+.65*.45,o),{stream:0, drip:-1, heat:0, boil:0, steam:0, tremble:false, error:true});
+    return {heat:0, tank:1, mug:0, stream:0, drip:-1, steam:0, boil:0};
+  },
+  draw(p,ctx){
+    const P=isoFn(this.origin), L='--machine-light', D='--machine-dark', id=ctx.uid, live=!REDUCED&&(p.tremble||p.alive);
+    const dk={dark:true,top:lift(D,14),front:`var(${D})`,side:shade(D,25)}, W=(u,v)=>P(u,-10,v);
+    const rim=P(0,6,44), rx=1.2247*18, ry=.7071*18, cz=16+26*p.mug, surf=P(0,6,cz);
+    let s=floorShadow(id,this.origin.cx,this.origin.cy+4,118,60);
+    s+=box(P,-50,-40,0,100,80,14,L,{top:lift(L,25)})+box(P,-50,-40,14,100,30,86,L,{top:lift(L,25)});
+    /* water tank window on the tower: level drops as it brews, bubbles while hot */
+    s+=poly([W(-42,30),W(-14,30),W(-14,88),W(-42,88)],lift(L,45),shade(L,35));
+    s+=`<polygon points="${pts([W(-41,31),W(-15,31),W(-15,31+56*p.tank),W(-41,31+56*p.tank)])}" style="fill:var(--plate);stroke:none" opacity=".85"/>`;
+    if(p.boil>.02) for(let i=0;i<4;i++){ const ph=((live?ctx.now/1100:0)+i/4)%1, b=W(-37+i*6.5,33+ph*(52*p.tank));
+      s+=`<circle cx="${f1(b[0])}" cy="${f1(b[1])}" r="1.5" style="fill:var(--paper)" opacity="${(.8*p.boil*(1-ph*.5)).toFixed(2)}"/>`; }
+    s+=cyl(P,0,6,14,2,22,'--plate',{top:p.heat>.05?lift('--paper-accent',30):lift('--plate',18)});   /* warming plate */
+    /* mug: paper cup with a pink band; the coffee surface rises inside the rim */
+    s+=cyl(P,0,6,16,28,18,'--paper',{side:shade('--paper',6),top:shade('--paper',16),stroke:shade(L,35)});
+    const band=(z0,z1)=>{const a=P(0,6,z0), b=P(0,6,z1);
+      return `<path d="M${f1(a[0]-rx)} ${f1(a[1])} A${f1(rx)} ${f1(ry)} 0 0 0 ${f1(a[0]+rx)} ${f1(a[1])} L${f1(b[0]+rx)} ${f1(b[1])} A${f1(rx)} ${f1(ry)} 0 0 1 ${f1(b[0]-rx)} ${f1(b[1])} Z" style="fill:var(--paper-accent);stroke:none"/>`;};
+    s+=band(26,33)+`<path d="M${f1(rim[0]+rx)} ${f1(rim[1]+10)} C${f1(rim[0]+rx+11)} ${f1(rim[1]+8)} ${f1(rim[0]+rx+11)} ${f1(rim[1]+24)} ${f1(rim[0]+rx-1)} ${f1(rim[1]+26)}" style="fill:none;stroke:${shade(L,35)};stroke-width:5"/>`+
+      `<path d="M${f1(rim[0]+rx)} ${f1(rim[1]+10)} C${f1(rim[0]+rx+11)} ${f1(rim[1]+8)} ${f1(rim[0]+rx+11)} ${f1(rim[1]+24)} ${f1(rim[0]+rx-1)} ${f1(rim[1]+26)}" style="fill:none;stroke:var(--paper);stroke-width:3"/>`;
+    if(p.mug>.02) s+=`<clipPath id="kcl${id}"><ellipse cx="${f1(rim[0])}" cy="${f1(rim[1])}" rx="${f1(rx-1.5)}" ry="${f1(ry-1)}"/></clipPath>`+
+      `<g clip-path="url(#kcl${id})"><ellipse cx="${f1(surf[0])}" cy="${f1(surf[1])}" rx="${f1(rx-1.5)}" ry="${f1(ry-1)}" style="fill:var(${p.error?'--accent':'--machine-dark'});stroke:${lift(D,30)}"/></g>`;
+    /* stream thins to drips at the end of the brew */
+    const nz=P(0,6,92);
+    if(p.stream>.05){ const w=2.6*p.stream, x=nz[0]+(live?.4*Math.sin(ctx.now/50):0);
+      s+=`<rect x="${f1(x-w/2)}" y="${f1(nz[1])}" width="${f1(w)}" height="${f1(surf[1]-nz[1])}" rx="${f1(w/2)}" style="fill:var(--machine-dark)" opacity=".85"/>`; }
+    for(let i=ctx.trail.length;i>=0;i--){ const q=i?ctx.trail[i-1]:p;
+      if(q&&q.drip>=0&&(i===0||Math.abs(q.drip-p.drip)>.03)){ const y=nz[1]+(surf[1]-nz[1])*easeIn(q.drip);
+        s+=`<ellipse cx="${f1(nz[0])}" cy="${f1(y)}" rx="1.8" ry="2.6" style="fill:var(--machine-dark)" opacity="${i?(i>1?.1:.22):1}"/>`; } }
+    s+=cyl(P,0,6,92,8,5,D,{dark:true})+box(P,-50,-40,100,100,58,18,D,dk);
+    const led=Array.from({length:12},(_,i)=>{const a=i/12*2*Math.PI; return P(36+3*Math.cos(a),18,109+3*Math.sin(a));});
+    s+=poly(led,p.error?'var(--accent)':p.heat>.05?'var(--paper-accent)':shade(L,30),shade(D,40));
+    /* steam: three wisps, each with two fading echoes behind it */
+    if(p.steam>.02) for(let k=0;k<3;k++) for(let e=2;e>=0;e--){
+      const ph=(((live?ctx.now/2400:0)+k/3-e*.035)%1+1)%1, x=rim[0]-8+k*8, y=rim[1]-6-ph*44, op=p.steam*(1-ph)*(e?(e>1?.12:.3):.75);
+      s+=`<path d="M${f1(x)} ${f1(y)} q5 -6 0 -12 t0 -12" style="fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round" opacity="${op.toFixed(2)}"/>`; }
+    return s+puff([rim[0],rim[1]-20], ctx.doneAge);
+  }
+};
+
 /* ---------- core (machine-agnostic) ---------- */
 function mountMachine(el, options){
   const o = Object.assign({machine:'press', fileName:'file', fromSize:1, toSize:.5, copy:{}, onAction:null, autoState:true, duration:2800}, options);
@@ -451,7 +828,7 @@ function mountMachine(el, options){
 
   let state='idle', pose=null, trail=[], lastSample=0, lastChange=0, doneAt=-1e9, raf=0, playing=false, t0=0, resolvePlay=null;
 
-  const vars = ()=>({file:o.fileName, from:fmt(o.fromSize), to:fmt(o.toSize), pct:Math.round((1-o.toSize/o.fromSize)*100)+'%'});
+  const vars = ()=>({file:o.fileName, from:fmt(o.fromSize), to:fmt(o.toSize), pct:Math.round((1-o.toSize/o.fromSize)*100)+'%', fromFmt:o.fromFormat||'', toFmt:o.toFormat||''});
   const fill = s=>{const v=vars(); return (s||'').replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m);};
   const phases = ()=>M.phases||DEFAULT_PHASES;
   const stateFor = p=>{for(const ph of phases()) if(p<ph.end) return ph.name; return phases()[phases().length-1].name;};
@@ -482,7 +859,7 @@ function mountMachine(el, options){
       applyProgress(p);
     }
     render(now);
-    const busy = playing || (phases().some(ph=>ph.name===state)&&pose&&pose.tremble&&!REDUCED) || now-doneAt<720 || now-lastChange<200;
+    const busy = playing || (phases().some(ph=>ph.name===state)&&pose&&pose.tremble&&!REDUCED) || (pose&&pose.alive&&!REDUCED) || now-doneAt<720 || now-lastChange<200;
     if(busy) raf=requestAnimationFrame(loop);
   }
   const kick = ()=>{ if(!raf) raf=requestAnimationFrame(loop); };
@@ -535,9 +912,9 @@ window.MACHINES = MACHINES;
 window.mountMachine = mountMachine;
 
 /* ---------- page: single view, or demo harness behind ?demo=1 ---------- */
-const DEMO_FILE = {fileName:'pitch-deck.pdf', fromSize:4.2, toSize:1.1};
+const DEMO_FILE = {fileName:'pitch-deck.pdf', fromSize:4.2, toSize:1.1, fromFormat:'PDF', toFormat:'DOCX'};
 const app = document.getElementById('app');
-const NAV = '<nav class="mnav"><span class="mnav-t">Machines</span><a href="./" aria-current="page">01 &middot; Press</a><a href="conveyor/">02 &middot; Conveyor Scanner</a><span class="mnav-off">03 &middot; Washing Machine &middot; soon</span></nav>';
+const NAV = '<nav class="mnav"><span class="mnav-t">Pages</span><a href="./" aria-current="page">Family demo &middot; 8 machines</a><a href="conveyor/">Conveyor &middot; standalone build</a><a href="claw/">Claw Sorter &middot; standalone build</a></nav>';
 
 function single(){
   app.className='single';

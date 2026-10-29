@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Claw Sorter · Machine 03</title>
+<style>
+:root{color-scheme:light;--machine-dark:#26262b;--machine-light:#d9d7e2;--plate:#adbcf5;--paper:#fff;--accent:#e8a274;--ground:#f5f4f0;--ink:#26262b;--muted:#77757e}
+*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);font:14px 'Space Mono',ui-monospace,monospace}button,input,select{font:inherit}button,select{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--plate);outline-offset:4px}button{border:1px solid #26262b22;border-radius:9px;padding:12px 19px;background:var(--paper);color:var(--ink)}button:hover{background:var(--machine-light)}[hidden]{display:none!important}
+.shell{max-width:1120px;margin:auto;padding:35px 24px}.mnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:22px}
+.mnav-t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.mnav a{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
+.mnav a:hover{border-color:var(--muted)}
+.mnav a[aria-current]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.mast{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #26262b18;padding-bottom:22px}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.mast strong{display:block;font-size:15px;margin-top:7px}.mast a{color:var(--muted);font-size:12px}.hero{min-height:70vh;display:grid;place-items:center}.machine{width:100%;max-width:560px;min-width:0;margin:auto;font-family:inherit;text-align:center}.machine svg{display:block;width:100%;aspect-ratio:4/3;overflow:visible}.machine h2{font-size:clamp(15px,2.5vw,20px);letter-spacing:-.045em;line-height:1.4;margin:0 0 9px}.machine p{font-size:12px;color:var(--muted);line-height:1.6;min-height:38px;margin:0 12px 15px;overflow-wrap:anywhere}.machine button{background:var(--ink);color:var(--paper);min-height:44px}.machine button:hover{opacity:.85}.machine .caption{min-height:135px}.machine svg *{stroke-linejoin:round;stroke-linecap:round}.meta{text-align:center;font-size:10px;color:var(--muted);letter-spacing:.08em;padding:25px 0}.controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:22px 0;border-block:1px solid #26262b18}.controls label{display:flex;gap:10px;align-items:center;font-size:12px}.controls input{width:160px;accent-color:var(--ink)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:30px}.tile{border:1px solid #26262b18;border-radius:16px;background:#ffffff55;padding:16px 12px}.tile-head{display:flex;justify-content:space-between;align-items:center;padding:0 8px}.tile-head button{padding:7px 10px;font-size:10px}.tile .machine h2{font-size:15px}.tile .machine p{font-size:10px}.tile .machine button{font-size:11px}.tile .caption{min-height:138px}.hint{max-width:630px;margin:25px auto;color:var(--muted);font-size:11px;line-height:1.8}code{color:var(--ink)}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.shell{padding:24px 15px}.grid{grid-template-columns:1fr}.mast a{font-size:10px}.hero{min-height:75vh}}
+</style>
+</head>
+<body>
+<main class="shell">
+<nav class="mnav"><span class="mnav-t">Pages</span><a href="../">Family demo &middot; 8 machines</a><a href="../conveyor/">Conveyor &middot; standalone build</a><a href="./" aria-current="page">Claw Sorter &middot; standalone build</a></nav>
+<header class="mast"><div><span class="eyebrow">The isometric machine family / 03</span><strong>Claw Sorter</strong></div><a id="demo-link" href="?demo=1">Open state lab</a></header>
+<section class="hero" id="hero"><div id="main-machine"></div></section>
+<section id="lab" hidden aria-label="Machine state lab">
+<div class="controls"><label>Batch <select id="count"><option>4</option><option selected>12</option><option>48</option></select></label><label>Progress <input id="progress" type="range" min="0" max="1" step="0.001" value="0"><output id="percent">0%</output></label><button id="play">Play batch</button><button id="jam">Jam it</button></div>
+<p class="hint">The slider drives the large machine. Each tile is an independent instance. Use “Jam it” during a run, then “Release the grip” to resume from the frozen count.</p><div class="grid" id="grid"></div>
+<p class="hint"><code>mountMachine(el, { machine: 'claw', items, batchLabel })</code><br>Returns <code>play(), setProgress(0..1), setState(name), setCopy(copy), destroy()</code>. States: idle, feeding, scanning, clearing, done, error. Working phases also accept <code>'working, scanning'</code> or <code>{ name: 'working', phase: 'scanning' }</code>. Listen for <code>machine:change</code> and <code>machine:action</code>.</p>
+</section><footer class="meta">ONE ITEM AT A TIME. EVERYTHING IN ITS PLACE.</footer>
+</main>
+<script>
+/* How to add a machine
+   1. Keep mountMachine(el, options) and the six family states unchanged.
+   2. Register the renderer by machine name, preserving previous renderers.
+   3. Keep palette tokens on the host; SVG is decorative, copy lives in HTML.
+   Embed: copy the .machine styles, palette defaults and this IIFE; omit harness.
+   mountMachine(el, {machine:'claw', items:[{label,kind}], batchLabel, copy, onAction})
+   copy[state] = {caption,subline,button}; each accepts a string or context function.
+   Context = {total,done,batchLabel,item,state}. State names match Conveyor Scanner.
+   External progress is authoritative; play() explicitly selects simulated progress.
+   Retry preserves the count and resumes the prior driver. destroy() releases resources.
+   Motion: descend, close, lift, traverse, release, return. One cycle = 2.6 seconds.
+*/
+(()=>{
+'use strict';
+const previousMount=window.mountMachine;
+let serial=0;
+const NS='http://www.w3.org/2000/svg',clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const ease=t=>{t=clamp(t);return t*t*(3-2*t)},lerp=(a,b,t)=>a+(b-a)*ease(t);
+const defaults={
+ idle:{caption:'Ready when you are',subline:c=>`${c.total} ${c.batchLabel} waiting`,button:'Start sorting'},
+ feeding:{caption:'Finding the first item',subline:c=>c.item.label,button:''},
+ scanning:{caption:'Putting things in their place',subline:c=>c.item.label,button:''},
+ clearing:{caption:'Last one, safely delivered',subline:'Parking the claw',button:''},
+ done:{caption:c=>`${c.total} ${c.batchLabel} organized`,subline:'All picked up. All put away.',button:'View collection'},
+ error:{caption:'The claw has a stuck grip',subline:c=>`${c.item.label} is caught. Your progress is saved.`,button:'Release the grip'}
+};
+window.mountMachine=function(el,options={}){
+ if(options.machine&&options.machine!=='claw'){if(previousMount)return previousMount(el,options);throw new RangeError('Unknown machine: '+options.machine)}
+ if(!(el instanceof Element))throw new TypeError('mountMachine needs a host element');
+ const items=(options.items||[]).map((v,i)=>({label:String(v.label||`Item ${i+1}`),kind:['photo','file','card'].includes(v.kind)?v.kind:'file'}));
+ const total=items.length,id='claw-'+(++serial),media=matchMedia('(prefers-reduced-motion: reduce)');
+ let state='idle',driver='manual',resumeDriver='manual',progress=0,done=0,phase=0,lead=0,tail=0,last=0,raf=0,dead=false,jamAt=0,recovery=0,copy=options.copy||{},signature='',history=[];
+ const root=document.createElement('div');root.className='machine';el.append(root);
+ const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 560 420');svg.setAttribute('aria-hidden','true');root.append(svg);
+ const S=(tag,a={},parent=svg)=>{const e=document.createElementNS(NS,tag);for(const[k,v]of Object.entries(a))e.setAttribute(k,v);parent.append(e);return e};
+ const P=(x,y,z=0)=>[255+.8660254*(x-y),235+.5*(x+y)-z];
+ const points=arr=>arr.map(p=>P(...p).join(',')).join(' ');
+ const poly=(p,fill,parent=svg,stroke='#57545e')=>S('polygon',{points:points(p),fill,stroke,'stroke-width':1,'stroke-linejoin':'round'},parent);
+ function box(x,y,z,w,d,h,fill,parent=svg){
+  poly([[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]],fill,parent);
+  poly([[x,y+d,z],[x+w,y+d,z],[x+w,y+d,z+h],[x,y+d,z+h]],fill,parent);
+  poly([[x+w,y,z],[x+w,y+d,z],[x+w,y+d,z+h],[x+w,y,z+h]],fill,parent);
+ }
+ const defs=S('defs'),filter=S('filter',{id:id+'-shadow',x:'-50%',y:'-100%',width:'200%',height:'300%'},defs);S('feGaussianBlur',{stdDeviation:10},filter);
+ S('ellipse',{cx:290,cy:353,rx:173,ry:29,fill:'var(--ink)',opacity:.12,filter:`url(#${id}-shadow)`});
+ const rig=S('g');
+ [[12,12],[198,12],[12,138],[198,138]].forEach(([x,y])=>box(x,y,-11,12,12,15,'var(--machine-dark)',rig));
+ box(0,0,0,225,160,47,'var(--machine-light)',rig);
+ poly([[8,8,48],[217,8,48],[217,152,48],[8,152,48]],'var(--machine-dark)',rig);
+ // Rear glass and cabinet uprights.
+ const back=poly([[0,0,48],[225,0,48],[225,0,213],[0,0,213]],'var(--plate)',rig,'#b0afbf');back.setAttribute('fill-opacity','.09');
+ const side=poly([[0,0,48],[0,160,48],[0,160,213],[0,0,213]],'var(--plate)',rig,'#b0afbf');side.setAttribute('fill-opacity','.07');
+ [[0,0],[217,0],[0,152]].forEach(([x,y])=>box(x,y,47,8,8,166,'var(--machine-light)',rig));
+ // Recessed input well and receiving tray.
+ box(24,34,49,84,88,5,'var(--machine-light)',rig);
+ poly([[29,39,55],[103,39,55],[103,117,55],[29,117,55]],'var(--machine-dark)',rig);
+ box(156,47,49,52,80,8,'var(--machine-light)',rig);
+ poly([[160,51,58],[204,51,58],[204,123,58],[160,123,58]],'var(--machine-dark)',rig);
+ const trayItems=S('g',{},rig),queue=S('g',{},rig);
+ function card(parent,kind,checked=false){
+  const g=S('g',{},parent);S('path',{d:'M-19 0V-42H9L19 -32V0Z',fill:'var(--paper)',stroke:'#9d9aa8','stroke-width':1},g);S('path',{d:'M9 -42V-32H19',fill:'var(--machine-light)',stroke:'#9d9aa8','stroke-width':1},g);
+  if(kind==='photo'){S('rect',{x:-14,y:-29,width:27,height:21,rx:2,fill:'var(--plate)'},g);S('circle',{cx:7,cy:-23,r:3,fill:'var(--paper)'},g);S('path',{d:'M-14 -8v-5l8-10 9 10 5-5 5 7v3Z',fill:'var(--machine-dark)',opacity:.75},g)}
+  else if(kind==='card'){S('rect',{x:-13,y:-28,width:11,height:12,rx:2,fill:'var(--accent)'},g);S('path',{d:'M4 -25h9 M4 -19h9 M-13 -8h26',stroke:'var(--plate)','stroke-width':2.5},g)}
+  else S('path',{d:'M-12 -26H3 M-12 -18H12 M-12 -10H7',stroke:'var(--plate)','stroke-width':3},g);
+  if(checked){S('rect',{x:6,y:-12,width:16,height:16,rx:4,fill:'var(--accent)'},g);S('path',{d:'M10 -4l3 3 5-7',fill:'none',stroke:'var(--ink)','stroke-width':1.5},g)}return g;
+ }
+ const queueCards=Array.from({length:5},()=>{const g=S('g',{},queue);['photo','file','card'].forEach(k=>card(g,k));return g});
+ const outputCards=Array.from({length:4},()=>card(trayItems,'photo',true));
+ // XY rail, moving trolley and suspended three-finger claw.
+ box(9,18,201,207,9,7,'var(--machine-dark)',rig);
+ box(9,129,201,207,9,7,'var(--machine-dark)',rig);
+ const moving=S('g',{},rig),bridge=S('g',{},moving),cable=S('path',{fill:'none',stroke:'var(--machine-dark)','stroke-width':2},moving);
+ const clawShadow=S('ellipse',{rx:19,ry:7,fill:'var(--ink)',opacity:.17},moving);
+ const held=S('g',{},moving);const heldVariants=['photo','file','card'].map(k=>card(held,k));
+ function claw(parent,opacity){const g=S('g',{opacity},parent),fingers=[];
+  fingers.push(S('path',{fill:'none',stroke:'#65616f','stroke-width':5},g));
+  S('ellipse',{cx:0,cy:-6,rx:11,ry:5,fill:'var(--machine-light)',stroke:'#57545e'},g);
+  S('path',{d:'M-11 -7V1Q0 10 11 1V-7',fill:'var(--machine-light)',stroke:'#57545e'},g);
+  const lamp=S('path',{d:'M-7 0Q0 4 7 0',fill:'none',stroke:'var(--plate)','stroke-width':3},g);
+  fingers.push(S('path',{fill:'none',stroke:'var(--machine-dark)','stroke-width':5},g));
+  fingers.push(S('path',{fill:'none',stroke:'var(--machine-dark)','stroke-width':5},g));return{g,fingers,lamp};}
+ const claws=[claw(moving,.08),claw(moving,.17),claw(moving,1)];
+ // Front frame stays in front of the mechanism, preserving depth.
+ box(217,152,47,8,8,166,'var(--machine-light)',rig);
+ box(-4,-4,213,233,14,17,'var(--machine-dark)',rig);
+ box(-4,10,213,14,140,17,'var(--machine-dark)',rig);
+ box(215,10,213,14,140,17,'var(--machine-dark)',rig);
+ // Open front crown: a deliberate cutaway keeps the moving claw visible.
+ const topLight=poly([[13,10,219],[201,10,219],[201,10,225],[13,10,225]],'var(--plate)',rig,'#797f9c');
+ // Small control shelf, joystick and action button, all decorative SVG.
+ box(58,161,20,117,23,12,'var(--machine-dark)',rig);
+ const [jx,jy]=P(89,173,34);S('ellipse',{cx:jx,cy:jy,rx:9,ry:5,fill:'var(--machine-light)'},rig);S('path',{d:`M${jx} ${jy}v-13`,stroke:'var(--ink)','stroke-width':4},rig);S('circle',{cx:jx,cy:jy-14,r:6,fill:'var(--accent)',stroke:'#b17956'},rig);
+ const [bx,by]=P(145,174,34);S('ellipse',{cx:bx,cy:by,rx:12,ry:6,fill:'var(--plate)',stroke:'#797f9c'},rig);
+ const [hx,hy]=P(197,160,23);S('path',{d:`M${hx-16} ${hy-4}h22`,stroke:'var(--machine-dark)','stroke-width':4},rig);
+ // Glass reflections are thin, sparse and never cover the claw.
+ poly([[0,48,171],[0,53,171],[0,92,103],[0,87,103]],'var(--paper)',rig,'none').setAttribute('opacity','.4');
+ const tag=S('g',{transform:'translate(411 85)'},rig);S('rect',{width:94,height:31,rx:8,fill:'var(--paper)',stroke:'#b9b6c3'},tag);const dot=S('circle',{cx:13,cy:15,r:3,fill:'var(--plate)'},tag);const counter=S('text',{x:54,y:20,'font-size':12,'font-family':'inherit','text-anchor':'middle',fill:'var(--ink)'},tag);
+ const scene=S('g',{transform:'translate(28 0) scale(.9)'});[...svg.children].filter(e=>e!==defs&&e!==scene).forEach(e=>scene.append(e));
+ const caption=document.createElement('div');caption.className='caption';const title=document.createElement('h2'),sub=document.createElement('p'),button=document.createElement('button');button.type='button';sub.setAttribute('aria-live','polite');sub.setAttribute('aria-atomic','true');caption.append(title,sub,button);root.append(caption);
+ function context(){return{total,done,batchLabel:options.batchLabel||'items',item:items[Math.min(done,total-1)]||{label:'No items'},state}}
+ function copyOut(){const c=context(),d={...defaults[state],...copy[state]},value=k=>typeof d[k]==='function'?d[k](c):d[k]||'';title.textContent=value('caption');if(sub.textContent!==value('subline'))sub.textContent=value('subline');button.textContent=value('button');button.hidden=!button.textContent;counter.textContent=`${done} / ${total}`;root.dataset.state=state;root.dataset.progress=progress;
+  const next=state+':'+done;if(next!==signature){signature=next;el.dispatchEvent(new CustomEvent('machine:change',{bubbles:true,detail:{...c,progress}}))}}
+ function coordinates(){
+  let x=66,y=78,z=140,open=1,itemZ=55,has=false,visible=false;
+  const p=phase;
+  if(state==='feeding'){x=lerp(127,66,lead);y=lerp(72,78,lead)}
+  else if(state==='idle'||state==='done'){x=127;y=72}
+  else if(state==='clearing'){x=lerp(181,127,tail);y=lerp(85,72,tail)}
+  else{
+   if(p<.22)z=lerp(140,105,p/.22);
+   else if(p<.32){z=105;open=1-ease((p-.22)/.1)}
+   else if(p<.53){z=lerp(105,140,(p-.32)/.21);open=0;has=true}
+   else if(p<.76){x=lerp(66,181,(p-.53)/.23);y=lerp(78,85,(p-.53)/.23);open=0;has=true}
+   else if(p<.84){x=181;y=85;open=ease((p-.76)/.08);has=true}
+   else if(p<.94){x=181;y=85;visible=true;itemZ=lerp(92,59,(p-.84)/.1)}
+   else{x=lerp(181,66,(p-.94)/.06);y=lerp(85,78,(p-.94)/.06)}
+  }
+  return{x,y,z,open,has,visible,itemZ};
+ }
+ function render(now=0){
+  const c=coordinates(),active=['feeding','scanning','clearing'].includes(state),jam=state==='error',twist=jam?Math.sin((now-jamAt)*.055)*Math.exp(-(now-jamAt)/130)*3:0;
+  rig.setAttribute('transform',`translate(${twist} 0)`);topLight.setAttribute('fill',jam?'var(--accent)':'var(--plate)');dot.setAttribute('fill',jam?'var(--accent)':'var(--plate)');
+  bridge.replaceChildren();box(c.x-11,19,196,22,119,7,'var(--machine-light)',bridge);box(c.x-13,c.y-10,187,26,20,10,'var(--machine-dark)',bridge);
+  const a=P(c.x,c.y,187),b=P(c.x,c.y,c.z);cable.setAttribute('d',`M${a}L${b}`);
+  const sh=P(c.x,c.y,57);clawShadow.setAttribute('cx',sh[0]);clawShadow.setAttribute('cy',sh[1]);
+  queueCards.forEach((g,i)=>{const index=done+i,skip=i===0&&(c.has||c.visible||phase>=.94)&&state!=='idle';g.style.display=index<total&&!skip&&state!=='done'&&state!=='clearing'?'':'none';
+   [...g.children].forEach((v,k)=>v.style.display=['photo','file','card'][k]===items[index]?.kind?'':'none');const p=P(66+(i%2)*22,78+Math.floor(i/2)*15,55);g.setAttribute('transform',`translate(${p}) matrix(.866 .5 0 1 0 0)`)});
+  outputCards.forEach((g,i)=>{g.style.display=i<Math.min(done,4)?'':'none';const p=P(181+(i%2)*3,85+Math.floor(i/2)*9,60+i*2);g.setAttribute('transform',`translate(${p}) matrix(.866 .5 -.6 .3 0 0)`)});
+  held.style.display=c.has||c.visible?'':'none';const itemP=P(c.x,c.y,c.has?c.z-48:c.itemZ);held.setAttribute('transform',`translate(${itemP}) matrix(.866 .5 0 1 0 0)`);heldVariants.forEach((v,i)=>v.style.display=['photo','file','card'][i]===context().item.kind?'':'none');
+  claws.forEach((cl,j)=>{const old=j===2?c:history[j]||c,p=P(old.x,old.y,old.z);cl.g.style.display=j<2&&!active?'none':'';cl.g.setAttribute('transform',`translate(${p}) rotate(${jam?-9:recovery*-9})`);const spread=lerp(9,24,old.open);cl.fingers[0].setAttribute('d',`M0 2L2 22 ${spread*.35} 34`);cl.fingers[1].setAttribute('d',`M-7 0L${-spread} 21 ${-spread+7} 33`);cl.fingers[2].setAttribute('d',`M7 0L${spread} 21 ${spread-7} 33`);cl.lamp.setAttribute('stroke',jam?'var(--accent)':'var(--plate)')});
+  history.push(c);if(history.length>2)history.shift();copyOut();
+ }
+ function finish(){state='done';done=total;progress=1;phase=0;driver='manual';history=[]}
+ function schedule(){if(!raf&&!dead&&!media.matches)raf=requestAnimationFrame(frame)}
+ function frame(now){raf=0;if(dead)return;const dt=last?Math.min(.05,(now-last)/1000):0;last=now;recovery=Math.max(0,recovery-dt*4);
+  if(media.matches){finish();render(now);return}
+  if(driver==='auto'&&state!=='error'&&state!=='idle'&&state!=='done'){
+   if(state==='feeding'){lead=clamp(lead+dt/.65);if(lead===1)state='scanning'}
+   else if(state==='clearing'){tail=clamp(tail+dt/.65);if(tail===1)finish()}
+   else if(recovery===0){phase+=dt/2.6;if(phase>=1){phase-=1;done++;progress=total?done/total:1;if(done>=total){done=total;state='clearing';tail=0}}}
+  }
+  render(now);if((driver==='auto'&&['feeding','scanning','clearing'].includes(state))||(state==='error'&&now-jamAt<900)||recovery>0)schedule();
+ }
+ function normalize(name){if(typeof name==='object')name=name.name==='working'?name.phase:name.name;name=String(name).replace(/^working\s*[,.:/]?\s*/,'')||'scanning';if(!defaults[name])throw new RangeError('Unknown state: '+name);return name}
+ const api={
+  play(){if(dead)return api;if(media.matches||!total){finish();render();return api}if(state==='error')return api;if(state==='done'){done=0;progress=0;phase=0;lead=0}driver='auto';state=done===0&&phase===0?'feeding':'scanning';last=0;schedule();render();return api},
+  setProgress(value){if(!Number.isFinite(value))throw new TypeError('Progress must be finite');if(state==='error'&&!media.matches)return api;driver='manual';progress=clamp(value);const position=progress*total;done=Math.floor(position+1e-9);phase=clamp(position-done);state=progress===0?'idle':progress===1?'done':'scanning';history=[];if(media.matches||!total)finish();render();return api},
+  setState(name){name=normalize(name);if(media.matches||!total){finish();render();return api}
+   if(name==='error'){if(state!=='error'){resumeDriver=driver;jamAt=performance.now()}state='error';schedule()}
+   else if(name==='idle'){state=name;driver='manual';done=0;progress=0;phase=0;lead=0;history=[]}
+   else if(name==='done')finish();
+   else{state=name;driver='auto';last=0;if(name==='feeding')lead=0;if(name==='clearing'){done=total;progress=1;tail=0}if(name==='scanning'&&done===total){done=0;progress=0;phase=0}schedule()}
+   render(performance.now());return api},
+  setCopy(next){copy={...copy,...next};copyOut();return api},
+  destroy(){dead=true;cancelAnimationFrame(raf);media.removeEventListener('change',motionChange);root.remove()},
+  get state(){return state},get progress(){return progress},get completed(){return done}
+ };
+ button.addEventListener('click',()=>{const action=state==='error'?'retry':state==='done'?'next':'start';if(action==='start')api.play();if(action==='retry'){state=done===total?'clearing':'scanning';driver=resumeDriver;recovery=1;last=0;history=[];render();schedule()}options.onAction?.(action,api);el.dispatchEvent(new CustomEvent('machine:action',{bubbles:true,detail:{action,api}}))});
+ function motionChange(){if(media.matches){finish();cancelAnimationFrame(raf);raf=0}render()}
+ media.addEventListener('change',motionChange);if(media.matches||!total)finish();render();return api;
+};
+})();
+// Demo harness. Omit this IIFE when embedding.
+(()=>{
+ const demo=new URLSearchParams(location.search).get('demo')==='1';document.querySelector('#lab').hidden=!demo;document.querySelector('#demo-link').textContent=demo?'Component only':'Open state lab';document.querySelector('#demo-link').href=demo?'?':'?demo=1';
+ let instances=[],main;const kinds=['photo','file','card'];
+ function mount(el,n){return mountMachine(el,{machine:'claw',items:Array.from({length:n},(_,i)=>({label:i%3===1?`notes-scan-${i+1}.pdf`:i%3===2?`contact-${i+1}.card`:`IMG_${2041+i}.jpg`,kind:kinds[i%3]})),batchLabel:'items',copy:{idle:{subline:`${n} items from your saved collection`}},onAction(action){if(action==='next'){el.querySelector('.machine p').textContent=`${n} items are ready in your collection.`;document.querySelector('.meta').textContent='COLLECTION READY · '+n+' ITEMS ORGANIZED'}}})}
+ function rebuild(n){instances.forEach(x=>x.destroy());instances=[];main=mount(document.querySelector('#main-machine'),n);instances.push(main);window.demoMachine=main;document.querySelector('#grid').replaceChildren();
+  if(demo)['idle','feeding','scanning','clearing','done','error'].forEach((state,i)=>{const tile=document.createElement('article');tile.className='tile';tile.innerHTML=`<div class="tile-head"><span class="eyebrow">0${i+1} / ${state}</span><button type="button">Preview</button></div><div class="slot"></div>`;document.querySelector('#grid').append(tile);const m=mount(tile.querySelector('.slot'),n);instances.push(m);const preview=()=>{m.setState('idle');if(state==='scanning'||state==='error')m.setProgress(2.65/n);m.setState(state)};preview();tile.querySelector('.tile-head button').onclick=preview});document.querySelector('#progress').value=0;document.querySelector('#percent').value='0%';}
+ rebuild(12);document.querySelector('#count').onchange=e=>rebuild(+e.target.value);
+ document.querySelector('#progress').oninput=e=>{main.setProgress(+e.target.value);e.target.value=main.progress;document.querySelector('#percent').value=Math.round(main.progress*100)+'%'};
+ document.querySelector('#play').onclick=()=>main.play();document.querySelector('#jam').onclick=()=>{if(main.state==='idle'||main.state==='done')main.setProgress(2.65/+document.querySelector('#count').value);main.setState('error')};
+ document.querySelector('#main-machine').addEventListener('machine:change',e=>{document.querySelector('#progress').value=e.detail.progress;document.querySelector('#percent').value=Math.round(e.detail.progress*100)+'%'});
+})();
+</script>
+</body>
+</html>

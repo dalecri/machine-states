@@ -13,14 +13,19 @@ A family of small isometric machine animations for product states: loading, comp
 
 ## Machines
 
-| # | Machine | Job it does | Status |
-|---|---|---|---|
-| 1 | The Press | Compressing, squeezing a file down (pitch-deck.pdf, 4.2 MB to 1.1 MB) | Built, in `index.html` |
-| 2 | Conveyor Scanner | Imports, batch processing, organizing, one item at a time | Built (Grok build), at `conveyor/` |
-| 3 | Washing Machine | Cleaning up, deduping, tidying a library | Prompt written, build pending |
+| Machine | Job it does | Where it lives |
+|---|---|---|
+| The Press | Compressing, squeezing a file down (pitch-deck.pdf, 4.2 MB to 1.1 MB) | In `index.html` |
+| Conveyor Scanner | Imports, batch processing, organizing, one item at a time | In `index.html`; standalone Grok build at `conveyor/` |
+| Washing Machine | Cleaning up, deduping, tidying a library | In `index.html` (as `washer`) |
+| Envelope Sealer | Sealing, sending, submitting | In `index.html` (as `sealer`) |
+| Printer | Printing, rendering, exporting to paper | In `index.html` (as `printer`) |
+| Typewriter | Writing, drafting, retyping | In `index.html` (as `typewriter`) |
+| Distiller | Summarizing, condensing, extracting | In `index.html` (as `distiller`) |
+| Coffee Machine | Waiting states, brewing, warming up | In `index.html` (as `coffee`) |
+| Claw Sorter | Picking, sorting, retrieving one item from many | Standalone Grok build at `claw/` |
+| Vending Machine | Checkout, credits, claiming a reward | Prompt written Oct 29, 2026, build pending |
 
 ## The page
 
-`index.html` is the family demo: the Press live at the top, the state grid, a progress slider wired to `setProgress`, and stub frames for the machines still to come. Open it with `?demo=1` for the full harness.
-
-Prompts for the family live in Cris's files (`isometric-machine-animations-prompt`, `conveyor-scanner-animation-prompt`, `washing-machine-animation-prompt`, all Oct 29, 2026) and are candidates for the vault's Prompts shelf.
+`index.html` is the family demo: eight machines registered in one file (press, conveyor, sealer, washer, printer, typewriter, distiller, coffee), a machine picker, a progress slider wired to `setProgress`, and a per-machine state grid. Open it with `?demo=1` for the full harness. Two machines also exist as standalone Grok builds with their own state labs, `conveyor/` and `claw/`, and every page carries a small Pages nav linking the three. Prompts for the family live in Cris's files (press, conveyor, washer, vending; Oct 29, 2026) and are candidates for the vault's Prompts shelf.
