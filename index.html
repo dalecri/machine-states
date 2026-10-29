@@ -38,6 +38,12 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:"Space Mono"
 .single{padding:48px 16px}
 .single .stage{max-width:340px;margin:0 auto}
 .hint{text-align:center;margin-top:28px}
+.mnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:6px auto 26px;max-width:680px}
+.mnav-t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.mnav a,.mnav .mnav-off{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
+.mnav a:hover{border-color:var(--muted)}
+.mnav a[aria-current]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.mnav .mnav-off{color:var(--muted);border-style:dashed}
 .link{font:inherit;font-size:12px;color:var(--muted);background:none;border:0;text-decoration:underline;cursor:pointer}
 .demo{max-width:1040px;margin:0 auto;padding:28px 16px 64px}
 .demo h1{font-size:20px;margin:0 0 4px}
@@ -341,10 +347,11 @@ window.mountMachine = mountMachine;
 /* ---------- page: single view, or demo harness behind ?demo=1 ---------- */
 const DEMO_FILE = {fileName:'pitch-deck.pdf', fromSize:4.2, toSize:1.1};
 const app = document.getElementById('app');
+const NAV = '<nav class="mnav"><span class="mnav-t">Machines</span><a href="./" aria-current="page">01 &middot; Press</a><a href="conveyor/">02 &middot; Conveyor Scanner</a><span class="mnav-off">03 &middot; Washing Machine &middot; soon</span></nav>';
 
 function single(){
   app.className='single';
-  app.innerHTML='<div class="stage"><div id="m0"></div></div><p class="hint"><button class="link" id="toDemo" type="button">Open the demo grid</button> &middot; <a class="link" href="conveyor/">Machine 02: Conveyor Scanner</a></p>';
+  app.innerHTML=NAV+'<div class="stage"><div id="m0"></div></div><p class="hint"><button class="link" id="toDemo" type="button">Open the demo grid</button></p>';
   mountMachine(document.getElementById('m0'), DEMO_FILE);
   document.getElementById('toDemo').onclick = demo;
 }
@@ -353,7 +360,7 @@ function demo(){
   app.className='demo';
   const names=['idle','lowering','pressing','lifting','done','error'];
   app.innerHTML=
-    '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side. Machine 02, the <a class="link" href="conveyor/">Conveyor Scanner</a>, lives on its own page for now.</p>'+
+    '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side.</p>'+NAV+
     '<div class="controls">'+
       '<label>Machine <select id="pick">'+Object.keys(MACHINES).map(n=>`<option>${n}</option>`).join('')+'</select></label>'+
       '<label class="grow">Progress <input type="range" id="prog" min="0" max="1000" value="0"></label>'+
