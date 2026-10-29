@@ -16,7 +16,7 @@ A family of small isometric machine animations for product states: loading, comp
 | # | Machine | Job it does | Status |
 |---|---|---|---|
 | 1 | The Press | Compressing, squeezing a file down (pitch-deck.pdf, 4.2 MB to 1.1 MB) | Built, in `index.html` |
-| 2 | Conveyor Scanner | Imports, batch processing, organizing, one item at a time | Prompt written, build pending |
+| 2 | Conveyor Scanner | Imports, batch processing, organizing, one item at a time | Built (Grok build), at `conveyor/` |
 | 3 | Washing Machine | Cleaning up, deduping, tidying a library | Prompt written, build pending |
 
 ## The page

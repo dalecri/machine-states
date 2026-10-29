@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conveyor Scanner · Machine 02</title>
+<style>
+:root{color-scheme:light;--machine-dark:#26262b;--machine-light:#d9d7e2;--plate:#adbcf5;--paper:#fff;--accent:#e8a274;--ground:#f5f4f0;--ink:#26262b;--muted:#77757e}
+*{box-sizing:border-box}body{margin:0;background:var(--ground);color:var(--ink);font:14px 'Space Mono',ui-monospace,monospace}button,input,select{font:inherit}button,select{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--plate);outline-offset:4px}button{border:1px solid #26262b22;border-radius:9px;padding:12px 19px;background:var(--paper);color:var(--ink)}button:hover{background:var(--machine-light)}[hidden]{display:none!important}
+.shell{max-width:1120px;margin:auto;padding:35px 24px}.mast{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #26262b18;padding-bottom:22px}.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}.mast strong{display:block;font-size:15px;margin-top:7px}.mast a{color:var(--muted);font-size:12px}.hero{min-height:70vh;display:grid;place-items:center}.machine{width:100%;max-width:560px;min-width:0;margin:auto;font-family:inherit;text-align:center}.machine svg{display:block;width:100%;aspect-ratio:4/3;overflow:visible}.machine h2{font-size:clamp(15px,2.5vw,20px);letter-spacing:-.045em;line-height:1.4;margin:0 0 9px}.machine p{font-size:12px;color:var(--muted);line-height:1.6;min-height:38px;margin:0 12px 15px;overflow-wrap:anywhere}.machine button{background:var(--ink);color:var(--paper);min-height:44px}.machine button:hover{opacity:.85}.machine .caption{min-height:135px}.machine svg *{stroke-linejoin:round;stroke-linecap:round}.meta{text-align:center;font-size:10px;color:var(--muted);letter-spacing:.08em;padding:25px 0}.controls{display:flex;gap:18px;align-items:center;flex-wrap:wrap;padding:22px 0;border-block:1px solid #26262b18}.controls label{display:flex;gap:10px;align-items:center;font-size:12px}.controls input{width:160px;accent-color:var(--ink)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:30px}.tile{border:1px solid #26262b18;border-radius:16px;background:#ffffff55;padding:16px 12px}.tile-head{display:flex;justify-content:space-between;align-items:center;padding:0 8px}.tile-head button{padding:7px 10px;font-size:10px}.tile .machine h2{font-size:15px}.tile .machine p{font-size:10px}.tile .machine button{font-size:11px}.tile .caption{min-height:138px}.hint{max-width:630px;margin:25px auto;color:var(--muted);font-size:11px;line-height:1.8}code{color:var(--ink)}@media(max-width:800px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:480px){.shell{padding:24px 15px}.grid{grid-template-columns:1fr}.mast a{font-size:10px}.hero{min-height:75vh}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header class="mast"><div><span class="eyebrow">The isometric machine family / 02</span><strong>Conveyor Scanner</strong></div><a id="demo-link" href="?demo=1">Open state lab</a></header>
+<section class="hero" id="hero"><div id="main-machine"></div></section>
+<section id="lab" hidden aria-label="Machine state lab">
+<div class="controls"><label>Batch <select id="count"><option>4</option><option>12</option><option selected>48</option></select></label><label>Progress <input id="progress" type="range" min="0" max="1" step="0.001" value="0"><output id="percent">0%</output></label><button id="play">Play batch</button><button id="jam">Jam it</button></div>
+<p class="hint">The slider drives the large machine. Each tile is an independent instance. Use “Jam it” during a run, then “Clear the jam” to resume from the frozen count.</p><div class="grid" id="grid"></div>
+<p class="hint"><code>mountMachine(el, { machine: 'conveyor', items, batchLabel })</code><br>Returns <code>play(), setProgress(0..1), setState(name), setCopy(copy), destroy()</code>. States: idle, feeding, scanning, clearing, done, error. Working phases also accept <code>'working, scanning'</code> or <code>{ name: 'working', phase: 'scanning' }</code>. Listen for <code>machine:change</code> and <code>machine:action</code>.</p>
+</section><footer class="meta">ONE ITEM AT A TIME. EVERYTHING IN ITS PLACE.</footer>
+</main>
+<script>
+/* How to add a machine
+   1. Keep mountMachine(el, options) and the six states below unchanged.
+   2. Register a renderer by machine name; share copy, progress and actions.
+   3. Keep palette tokens on the host. SVG is decorative; copy lives in HTML.
+   Embed: copy the .machine styles, palette defaults and this IIFE; omit demo harness.
+   copy[state] = {caption, subline, button}; strings or functions(context).
+   Context: {total, done, batchLabel, item, state}. onAction(action, api) is optional.
+   Progress is authoritative: external updates never invent completed items.
+   play() switches to simulation; retry resumes whichever driver was active.
+   No network, dependencies, assets or fonts are loaded by this file.
+*/
+(()=>{
+'use strict';
+let serial=0;
+const NS='http://www.w3.org/2000/svg', clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const defaults={
+ idle:{caption:'Ready when you are',subline:c=>`${c.total} ${c.batchLabel} waiting`,button:'Start import'},
+ feeding:{caption:'Feeding the scanner',subline:c=>c.item.label,button:''},
+ scanning:{caption:'Scanning your items',subline:c=>c.item.label,button:''},
+ clearing:{caption:'Last few',subline:'Clearing the belt',button:''},
+ done:{caption:c=>`${c.total} ${c.batchLabel} imported`,subline:'Everything is in its place',button:'View library'},
+ error:{caption:'An item caught on the scanner',subline:c=>`${c.item.label} is stuck. Your progress is saved.`,button:'Clear the jam'}
+};
+window.mountMachine=function(el,options={}){
+ if(!(el instanceof Element))throw new TypeError('mountMachine needs a host element');
+ if(options.machine&&options.machine!=='conveyor')throw new RangeError('Unknown machine');
+ const items=(options.items||[]).map((v,i)=>({label:String(v.label||`Item ${i+1}`),kind:['photo','file','card'].includes(v.kind)?v.kind:'file'}));
+ const n=items.length, id=`conveyor-${++serial}`, media=matchMedia('(prefers-reduced-motion: reduce)');
+ let state='idle',travel=0,velocity=0,driver='manual',last=0,raf=0,dead=false,jamAt=0,tip=0,done=0,progress=0;
+ let copy=options.copy||{},history=[],lastSignature='',resumeDriver='manual';
+ const root=document.createElement('div');root.className='machine';el.append(root);
+ const svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 560 420');svg.setAttribute('aria-hidden','true');root.append(svg);
+ const make=(tag,attrs={},parent=svg)=>{const e=document.createElementNS(NS,tag);for(const [k,v]of Object.entries(attrs))e.setAttribute(k,v);parent.append(e);return e};
+ const poly=(points,fill,parent=svg,stroke='#26262b')=>make('polygon',{points,fill,stroke,'stroke-width':1.1},parent);
+ const P=(x,y,z=0)=>[65+.8660254*(x+y),275-.5*x+.5*y-z];
+ const pts=a=>a.map(v=>P(...v).join(',')).join(' ');
+ function box(x,y,z,w,d,h,fill,parent){
+  poly(pts([[x,y+d,z],[x+w,y+d,z],[x+w,y+d,z+h],[x,y+d,z+h]]),fill,parent);
+  poly(pts([[x,y,z],[x,y+d,z],[x,y+d,z+h],[x,y,z+h]]),fill,parent);
+  poly(pts([[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]]),fill,parent);
+ }
+ const defs=make('defs');const blur=make('filter',{id:id+'-blur',x:'-50%',y:'-100%',width:'200%',height:'300%'},defs);make('feGaussianBlur',{stdDeviation:10},blur);
+ const clip=make('clipPath',{id:id+'-belt'},defs);make('rect',{x:0,y:0,width:370,height:85,rx:7},clip);
+ make('ellipse',{cx:283,cy:294,rx:206,ry:31,fill:'var(--ink)',opacity:.13,filter:`url(#${id}-blur)`});
+ const rig=make('g');
+ [[24,8],[24,70],[327,8],[327,70]].forEach(([x,y])=>box(x,y,-40,14,12,39,'var(--machine-light)',rig));
+ box(0,-5,-18,370,95,18,'var(--machine-light)',rig);
+ const plane=make('g',{transform:'matrix(.8660254 -.5 .8660254 .5 65 275)'},rig);
+ make('rect',{width:370,height:85,rx:6,fill:'var(--machine-dark)',stroke:'var(--ink)'},plane);
+ const slats=make('g',{'clip-path':`url(#${id}-belt)`},plane), slatShift=make('g',{},slats);
+ for(let x=-30;x<410;x+=24)make('path',{d:`M${x} 5 l10 37 -10 38`,fill:'none',stroke:'var(--machine-light)','stroke-width':2,opacity:.35},slatShift);
+ box(0,-7,0,370,6,7,'var(--machine-light)',rig);
+ const rollers=[];
+ for(let x=14;x<370;x+=28){const [cx,cy]=P(x,91,-9);const g=make('g',{transform:`translate(${cx} ${cy})`},rig);make('ellipse',{rx:7,ry:8,fill:'var(--machine-dark)',stroke:'var(--ink)'},g);const r=make('g',{},g);make('path',{d:'M-4 0H4 M0 -4V4',stroke:'var(--machine-light)','stroke-width':1,opacity:.7},r);rollers.push(r)}
+ box(237,-9,7,17,15,104,'var(--machine-dark)',rig);
+ const wedge=poly(pts([[240,5,97],[240,79,97],[270,85,1],[210,0,1]]),'var(--plate)',rig,'none');
+ const glowTrails=[.08,.16].map(op=>{const g=poly(pts([[240,5,97],[240,79,97],[270,85,1],[210,0,1]]),'var(--plate)',rig,'none');g.setAttribute('opacity',op);return g});
+ const cards=make('g',{},rig);
+ const nodes=items.map((item,i)=>{
+  const holder=make('g',{},cards),shadow=make('ellipse',{rx:27,ry:8,fill:'var(--ink)',opacity:.14},holder);
+  const face=make('g',{},holder);
+  make('path',{d:'M-25 0V-60H13L25 -48V0Z',fill:'var(--paper)',stroke:'#9d9aa8','stroke-width':1.2},face);
+  make('path',{d:'M13 -60V-48H25',fill:'var(--machine-light)',stroke:'#9d9aa8','stroke-width':1},face);
+  if(item.kind==='photo'){
+   make('rect',{x:-19,y:-43,width:37,height:29,rx:2,fill:'var(--plate)'},face);
+   make('circle',{cx:8,cy:-35,r:4,fill:'var(--paper)'},face);
+   make('path',{d:'M-19 -14V-21L-8 -34 3 -23 10 -28 18 -18V-14Z',fill:'var(--machine-dark)',opacity:.72},face);
+  }else if(item.kind==='card'){
+   make('rect',{x:-18,y:-43,width:14,height:15,rx:3,fill:'var(--plate)'},face);
+   make('path',{d:'M2 -39H17 M2 -32H13 M-18 -17H17',stroke:'#9d9aa8','stroke-width':3},face);
+  }else make('path',{d:'M-17 -39H5 M-17 -29H16 M-17 -19H10',stroke:'var(--plate)','stroke-width':4},face);
+  const scans=[.12,.25,1].map(op=>make('path',{d:'M-23 0H23',stroke:'var(--plate)','stroke-width':3,opacity:op},face));
+  const checks=[.12,.25,1].map(op=>{const g=make('g',{opacity:op},face);make('rect',{x:11,y:-17,width:20,height:20,rx:5,fill:'var(--accent)',stroke:'#b17956','stroke-width':.8},g);make('path',{d:'M16 -7l4 4 6-8',fill:'none',stroke:'var(--ink)','stroke-width':1.7},g);return g});
+  return{holder,face,shadow,scans,checks,i};
+ });
+ box(237,80,7,17,15,104,'var(--machine-dark)',rig);
+ box(234,-9,111,25,104,17,'var(--machine-dark)',rig);
+ const lamp=poly(pts([[236,6,110],[258,6,110],[258,78,110],[236,78,110]]),'var(--plate)',rig,'#666678');
+ const chip=make('g',{transform:'translate(380 43)'},rig);make('rect',{width:95,height:31,rx:8,fill:'var(--paper)',stroke:'#b9b6c3','stroke-width':1},chip);
+ make('circle',{cx:13,cy:15.5,r:3,fill:'var(--plate)'},chip);const counter=make('text',{x:54,y:20,'text-anchor':'middle','font-size':12,fill:'var(--ink)','font-family':'inherit'},chip);
+ const cap=document.createElement('div');cap.className='caption';const title=document.createElement('h2'),sub=document.createElement('p'),button=document.createElement('button');sub.setAttribute('aria-live','polite');sub.setAttribute('aria-atomic','true');button.type='button';cap.append(title,sub,button);root.append(cap);
+ const context=()=>({total:n,done,batchLabel:options.batchLabel||'items',item:items[Math.min(done,n-1)]||{label:'No items'},state});
+ function caption(){
+  const c=context(),data={...defaults[state],...copy[state]},value=k=>typeof data[k]==='function'?data[k](c):data[k]||'';
+  title.textContent=value('caption');const text=value('subline');if(sub.textContent!==text)sub.textContent=text;button.textContent=value('button');button.hidden=!button.textContent;
+  counter.textContent=`${done} / ${n}`;root.dataset.state=state;root.dataset.progress=progress;
+  const signature=state+':'+done;if(signature!==lastSignature){lastSignature=signature;el.dispatchEvent(new CustomEvent('machine:change',{detail:{...c,progress},bubbles:true}))}
+ }
+ function pose(now=0){
+  const reduced=media.matches, active=['feeding','scanning','clearing'].includes(state), scanIndex=Math.min(done,n-1);
+  const currentX=168+travel-scanIndex*64,scan=state==='scanning'&&currentX>202&&currentX<240;
+  const glow=state==='error'?.75:scan?Math.sin(clamp((currentX-202)/38)*Math.PI)*.85:.07;
+  wedge.setAttribute('opacity',state==='idle'||state==='done'?0:glow*.28);wedge.setAttribute('fill',state==='error'?'var(--accent)':'var(--plate)');
+  glowTrails.forEach((g,j)=>{g.setAttribute('opacity',active?(history[j]?.glow||0)*(.05+j*.05):0);g.setAttribute('transform',`translate(0 ${2-j})`)});
+  lamp.setAttribute('fill',state==='error'?'var(--accent)':active?'var(--plate)':'var(--machine-dark)');lamp.setAttribute('opacity',active?.5+glow*.5:1);
+  slatShift.setAttribute('transform',`translate(${travel%24} 0)`);rollers.forEach(r=>r.setAttribute('transform',`rotate(${travel/7*180/Math.PI})`));
+  const shudder=state==='error'?Math.sin((now-jamAt)*.075)*Math.exp(-(now-jamAt)/95)*3:0;rig.setAttribute('transform',`translate(${shudder} 0)`);
+  nodes.forEach(o=>{
+   const x=168+travel-o.i*64,visible=!reduced&&state!=='done'&&x>-18&&x<385;
+   o.holder.style.display=visible?'':'none';if(!visible)return;
+   const processed=o.i<done,settle=processed?clamp((x-240)/30):0;
+   const [px,py]=P(x,42,1),bob=active&&!processed?Math.sin(now*.003+o.i*1.7)*1.2:0;
+   o.holder.setAttribute('transform',`translate(${px} ${py})`);o.holder.setAttribute('opacity',clamp((x+18)/22)*clamp((385-x)/22));
+   o.face.setAttribute('transform',`matrix(.866 .5 ${-.66*settle} ${1-.62*settle} 0 ${bob}) rotate(${o.i===scanIndex?tip:0})`);
+   o.scans.forEach((line,j)=>{const hx=history[j]?.travel??travel,xx=168+hx-o.i*64,show=!processed&&state==='scanning'&&xx>202&&xx<240;line.style.display=show?'':'none';line.setAttribute('transform',`translate(0 ${-57+clamp((xx-202)/38)*54})`)});
+   o.checks.forEach((check,j)=>{const hx=history[j]?.travel??travel,t=clamp((168+hx-o.i*64-240)/15);check.style.display=processed?'':'none';check.setAttribute('transform',`translate(21 -7) scale(${t?1+Math.sin(t*Math.PI)*.2:0}) translate(-21 7)`)});
+  });
+  history.push({travel,glow});if(history.length>3)history.shift();caption();
+ }
+ function normalize(name){if(typeof name==='object')name=name.name==='working'?name.phase:name.name;name=String(name).replace(/^working\s*[,.:/]?\s*/,'')||'scanning';if(!defaults[name])throw new RangeError('Unknown machine state: '+name);return name}
+ function schedule(){if(!raf&&!dead&&!media.matches)raf=requestAnimationFrame(frame)}
+ function complete(){state='done';done=n;progress=1;velocity=0;driver='manual';travel=8+n*64+160}
+ function frame(now){
+  raf=0;if(dead)return;const dt=last?Math.min((now-last)/1000,.05):0;last=now;
+  if(media.matches){complete();pose(now);return}
+  if(state==='error'){tip+=( -25-tip)*Math.min(1,dt*16)}else tip+=(0-tip)*Math.min(1,dt*16);
+  if(driver==='auto'&&state!=='error'&&state!=='done'&&state!=='idle'){
+   const remaining=8+n*64+150-travel,target=remaining<55?Math.max(16,remaining*2):80;velocity+=(target-velocity)*(1-Math.exp(-dt*6));travel+=velocity*dt;
+   done=clamp(Math.floor((travel-8)/64),0,n);progress=n?done/n:1;
+   state=done===n?'clearing':travel<40?'feeding':'scanning';if(remaining<=1)complete();
+  }
+  pose(now);if(['feeding','scanning','clearing'].includes(state)||(state==='error'&&now-jamAt<900)||Math.abs(tip)>.05)schedule();
+ }
+ const api={
+  play(){if(dead)return api;if(media.matches||!n){complete();pose();return api}if(state==='done'){travel=0;done=0;progress=0}driver='auto';state=travel<40?'feeding':done===n?'clearing':'scanning';last=0;schedule();caption();return api},
+  setProgress(value){if(!Number.isFinite(value))throw new TypeError('Progress must be finite');if(state==='error'&&!media.matches)return api;driver='manual';velocity=0;progress=clamp(value);done=Math.floor(progress*n+1e-9);travel=progress===0?0:8+progress*n*64;state=progress===0?'idle':progress===1?'done':'scanning';if(media.matches||!n)complete();history=[];pose();schedule();return api},
+  setState(name){name=normalize(name);if(media.matches){complete();pose();return api}if(name==='error'){if(state!=='error'){resumeDriver=driver;jamAt=performance.now()}state='error';velocity=0;schedule()}
+   else if(name==='idle'){driver='manual';travel=0;done=0;progress=0;state=name;velocity=0;tip=0;history=[]}
+   else if(name==='done')complete();
+   else{state=name;driver='auto';velocity=0;last=0;if(name==='feeding'&&travel===0)travel=12;if(name==='scanning'&&travel<40)travel=50;if(name==='clearing'){done=n;progress=1;travel=8+n*64+40}schedule()}
+   pose(performance.now());return api},
+  setCopy(next){copy={...copy,...next};caption();return api},
+  destroy(){dead=true;cancelAnimationFrame(raf);media.removeEventListener('change',motionChange);root.remove()},
+  get state(){return state},get progress(){return progress},get completed(){return done}
+ };
+ button.addEventListener('click',()=>{const action=state==='error'?'retry':state==='done'?'next':'start';if(action==='start')api.play();if(action==='retry'){state=done===n?'clearing':travel<40?'feeding':'scanning';driver=resumeDriver;last=0;history=[];schedule();pose()}
+  options.onAction?.(action,api);el.dispatchEvent(new CustomEvent('machine:action',{detail:{action,api},bubbles:true}));});
+ function motionChange(){if(media.matches){complete();cancelAnimationFrame(raf);raf=0;pose()}else pose()}
+ media.addEventListener('change',motionChange);if(media.matches||!n)complete();pose();return api;
+};
+})();
+// Demo harness. Remove everything below when embedding the component.
+(()=>{
+ const demo=new URLSearchParams(location.search).get('demo')==='1';
+ document.querySelector('#lab').hidden=!demo;document.querySelector('#demo-link').textContent=demo?'Component only':'Open state lab';document.querySelector('#demo-link').href=demo?'?':'?demo=1';
+ const kinds=['photo','photo','file','card'];let instances=[],main;
+ function batch(n){return Array.from({length:n},(_,i)=>({label:i%4===2?`notes-scan-${i+1}.pdf`:i%4===3?`contact-${i+1}.card`:`IMG_${2041+i}.jpg`,kind:kinds[i%4]}))}
+ function mount(el,n){return mountMachine(el,{machine:'conveyor',items:batch(n),batchLabel:'photos',copy:{idle:{subline:`${n} photos from Camera Roll`}},onAction(action){if(action==='next'){document.querySelector('.meta').textContent='LIBRARY OPENED · '+n+' ITEMS READY';el.querySelector('.machine p').textContent=`${n} imported items are ready in your library.`}}})}
+ function rebuild(n){instances.forEach(x=>x.destroy());instances=[];main=mount(document.querySelector('#main-machine'),n);instances.push(main);window.demoMachine=main;document.querySelector('#grid').replaceChildren();
+  if(demo)['idle','feeding','scanning','clearing','done','error'].forEach((state,i)=>{const tile=document.createElement('article');tile.className='tile';tile.innerHTML=`<div class="tile-head"><span class="eyebrow">0${i+1} / ${state}</span><button type="button">Preview</button></div><div class="slot"></div>`;document.querySelector('#grid').append(tile);const m=mount(tile.querySelector('.slot'),n);instances.push(m);function preview(){m.setState('idle');if(['scanning','error'].includes(state))m.setProgress(.35);m.setState(state)}preview();tile.querySelector('.tile-head button').onclick=preview});
+  document.querySelector('#progress').value=0;document.querySelector('#percent').value='0%';
+ }
+ rebuild(48);document.querySelector('#count').onchange=e=>rebuild(+e.target.value);
+ document.querySelector('#progress').oninput=e=>{main.setProgress(+e.target.value);e.target.value=main.progress;document.querySelector('#percent').value=Math.round(main.progress*100)+'%'};
+ document.querySelector('#play').onclick=()=>main.play();document.querySelector('#jam').onclick=()=>{if(main.state==='idle'||main.state==='done')main.setProgress(.35);main.setState('error')};
+ document.querySelector('#main-machine').addEventListener('machine:change',e=>{document.querySelector('#progress').value=e.detail.progress;document.querySelector('#percent').value=Math.round(e.detail.progress*100)+'%'});
+})();
+</script>
+</body>
+</html>

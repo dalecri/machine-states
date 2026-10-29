@@ -344,7 +344,7 @@ const app = document.getElementById('app');
 
 function single(){
   app.className='single';
-  app.innerHTML='<div class="stage"><div id="m0"></div></div><p class="hint"><button class="link" id="toDemo" type="button">Open the demo grid</button></p>';
+  app.innerHTML='<div class="stage"><div id="m0"></div></div><p class="hint"><button class="link" id="toDemo" type="button">Open the demo grid</button> &middot; <a class="link" href="conveyor/">Machine 02: Conveyor Scanner</a></p>';
   mountMachine(document.getElementById('m0'), DEMO_FILE);
   document.getElementById('toDemo').onclick = demo;
 }
@@ -353,7 +353,7 @@ function demo(){
   app.className='demo';
   const names=['idle','lowering','pressing','lifting','done','error'];
   app.innerHTML=
-    '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side.</p>'+
+    '<h1>Machine states</h1><p class="muted">Swap the machine, scrub progress on the live one, or jump it to a state. The grid shows every state side by side. Machine 02, the <a class="link" href="conveyor/">Conveyor Scanner</a>, lives on its own page for now.</p>'+
     '<div class="controls">'+
       '<label>Machine <select id="pick">'+Object.keys(MACHINES).map(n=>`<option>${n}</option>`).join('')+'</select></label>'+
       '<label class="grow">Progress <input type="range" id="prog" min="0" max="1000" value="0"></label>'+
