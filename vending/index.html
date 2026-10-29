@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isometric Machine #4 — Vending Machine</title>
+  <style>
+    :root {
+      --machine-dark: #26262b;
+      --machine-light: #d9d7e2;
+      --plate: #adbcf5;
+      --paper: #ffffff;
+      --accent: #ff6b5b;
+      --ground: #f4f3f8;
+      --ink: #1b1b20;
+      --muted: #6e6c78;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--ground);
+      color: var(--ink);
+      font-family: "Space Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Host Component Styles */
+    .iso-machine {
+      width: 100%;
+      max-width: 340px;
+      min-width: 180px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      user-select: none;
+    }
+
+    .iso-machine-stage {
+      width: 100%;
+      aspect-ratio: 320 / 370;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .iso-machine-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+
+    .iso-caption-block {
+      margin-top: 0.75rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      width: 100%;
+      min-height: 5.5rem;
+    }
+
+    .iso-caption {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+    }
+
+    .iso-subline {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.35;
+      min-height: 1.1em;
+    }
+
+    .iso-btn {
+      margin-top: 0.45rem;
+      appearance: none;
+      background: var(--machine-dark);
+      color: var(--paper);
+      border: 1.5px solid var(--machine-dark);
+      border-radius: 5px;
+      padding: 0.42rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+    }
+
+    .iso-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--paper);
+    }
+
+    .iso-btn:active {
+      transform: translateY(1px);
+    }
+
+    .iso-btn[hidden] {
+      display: none !important;
+    }
+
+    /* Demo & Layout Chrome */
+    .demo-bar {
+      width: 100%;
+      max-width: 1120px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 1.5px solid rgba(38, 38, 43, 0.12);
+    }
+
+    .demo-bar-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .demo-badge {
+      background: var(--machine-light);
+      color: var(--machine-dark);
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+    }
+
+    .demo-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .demo-pill {
+      appearance: none;
+      background: var(--paper);
+      color: var(--ink);
+      border: 1.5px solid var(--machine-dark);
+      padding: 0.35rem 0.7rem;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.12s ease;
+    }
+
+    .demo-pill:hover, .demo-pill.active {
+      background: var(--machine-dark);
+      color: var(--paper);
+    }
+
+    .demo-pill.danger {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .demo-pill.danger:hover {
+      background: var(--accent);
+      color: var(--paper);
+    }
+
+    .single-stage-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      max-width: 480px;
+      margin: 1rem auto;
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 12px;
+      padding: 2rem 1.5rem 1.75rem;
+      box-shadow: 0 12px 30px -12px rgba(38, 38, 43, 0.08);
+    }
+
+    .single-toolbar {
+      margin-top: 1.4rem;
+      padding-top: 1rem;
+      border-top: 1px dashed rgba(38, 38, 43, 0.16);
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.4rem;
+    }
+
+    .demo-grid {
+      width: 100%;
+      max-width: 1120px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .demo-tile {
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 10px;
+      padding: 1.15rem 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .demo-tile-head {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid rgba(38, 38, 43, 0.08);
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .demo-slider-bar {
+      width: 100%;
+      max-width: 1120px;
+      background: var(--paper);
+      border: 1.5px solid rgba(38, 38, 43, 0.12);
+      border-radius: 10px;
+      padding: 0.9rem 1.2rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .slider-group {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .slider-group label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .slider-group input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .slider-val {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent);
+      min-width: 3.2rem;
+      text-align: right;
+    }
+  .mnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;margin:18px auto 4px;max-width:680px;font-family:inherit}
+.mnav-t{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+.mnav a{font-size:12px;padding:6px 12px;border:1px solid color-mix(in srgb,var(--muted) 35%,transparent);border-radius:999px;text-decoration:none;color:var(--ink)}
+.mnav a:hover{border-color:var(--muted)}
+.mnav a[aria-current]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+</style>
+</head>
+<body>
+
+<nav class="mnav"><span class="mnav-t">Pages</span><a href="../">Family demo &middot; 8 machines</a><a href="../conveyor/">Conveyor &middot; standalone build</a><a href="../claw/">Claw Sorter &middot; standalone build</a><a href="./" aria-current="page">Vending &middot; standalone build</a></nav>
+
+  <header class="demo-bar">
+    <div class="demo-bar-title">
+      <span>Machine #4 // Isometric Vending</span>
+      <span class="demo-badge" id="mode-badge">Interactive</span>
+    </div>
+    <div class="demo-controls">
+      <button type="button" class="demo-pill" id="toggle-demo-btn">Switch to 6-State Harness (?demo=1)</button>
+    </div>
+  </header>
+
+  <main id="app-root" style="width: 100%; display: flex; flex-direction: column; align-items: center;"></main>
+
+  <script>
+    /*
+     * ============================================================================
+     * HOW TO ADD A MACHINE TO THE ISOMETRIC FAMILY
+     * ============================================================================
+     * 1. Geometry: 30-degree isometric axes (cos30 = 0.866, sin30 = 0.5). Flat fills,
+     *    single 1.5px --machine-dark stroke with round joins, wide soft floor shadow.
+     * 2. Palette: Use only the 8 family CSS variables (--machine-dark, --machine-light,
+     *    --plate, --paper, --accent, --ground, --ink, --muted).
+     * 3. Six Canonical States:
+     *    - "idle"              : Ready and waiting, subtle periodic ambient sweep
+     *    - "working, crediting": Input/payment intake, counting up or locking in
+     *    - "working, winding"  : Core mechanical loop with stepped/eased creep
+     *    - "working, dropping" : Release threshold, gravity ease-in + single bounce
+     *    - "done"              : Output resting in collection bay, ready to claim
+     *    - "error"             : Jam/fault with decaying whole-body wobble & recovery
+     * 4. Motion Rules: Eased curves only (never linear). Moving parts render a 2-frame
+     *    staggered low-opacity trail. Respect prefers-reduced-motion by collapsing
+     *    directly to the static "done" pose.
+     * 5. API Contract: mountMachine(el, opts) -> { setState, setProgress, play, destroy }.
+     * ============================================================================
+     */
+
+    (function () {
+      const SVG_NS = "http://www.w3.org/2000/svg";
+
+      // Easing utilities (never linear)
+      const easeOutCubic = (t) => 1 - Math.pow(1 - Math.max(0, Math.min(1, t)), 3);
+      const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      const easeInQuad = (t) => t * t; // Gravity ease-in
+
+      function createSvgEl(tag, attrs = {}) {
+        const el = document.createElementNS(SVG_NS, tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          el.setAttribute(k, String(v));
+        }
+        return el;
+      }
+
+      // Generates an isometric spiral helix path extending along +Z (forward-left: dx = -0.866, dy = +0.5)
+      function buildCoilPath(cx, cy, phaseRad = 0, turns = 4.5, length = 15, rx = 6.2, ry = 5.2) {
+        const steps = 42;
+        let d = "";
+        for (let i = 0; i <= steps; i++) {
+          const u = i / steps;
+          const theta = u * turns * Math.PI * 2 + phaseRad;
+          const x = cx + u * (-0.866 * length) + Math.cos(theta) * rx;
+          const y = cy + u * (0.5 * length) + Math.sin(theta) * ry;
+          d += (i === 0 ? "M " : " L ") + x.toFixed(2) + " " + y.toFixed(2);
+        }
+        return d;
+      }
+
+      // Draws a stylized snack packet / item centered at (0, 0) for a given type
+      function createSnackGraphic(type, variantColor) {
+        const g = createSvgEl("g", {
+          "stroke": "var(--machine-dark)",
+          "stroke-width": "1.4",
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+
+        if (type === "packet") {
+          // Trail mix / chip pouch (B2 hero item or standard pouch)
+          g.appendChild(createSvgEl("polygon", {
+            points: "-8,-11 8,-9 7,9 -9,7",
+            fill: variantColor
+          }));
+          // Crinkled top & bottom seals
+          g.appendChild(createSvgEl("polygon", {
+            points: "-9,-13 9,-11 8,-9 -8,-11",
+            fill: "var(--paper)"
+          }));
+          g.appendChild(createSvgEl("polygon", {
+            points: "-9,7 7,9 8,11 -10,9",
+            fill: "var(--paper)"
+          }));
+          // Center label band
+          g.appendChild(createSvgEl("polygon", {
+            points: "-6,-4 6,-2.5 5.5,3.5 -6.5,2",
+            fill: "var(--paper)"
+          }));
+          // Tiny graphic stripe on pouch
+          g.appendChild(createSvgEl("line", {
+            x1: "-3.5", y1: "-0.8", x2: "3", y2: "0.2",
+            stroke: "var(--machine-dark)", "stroke-width": "1.4"
+          }));
+        } else if (type === "can") {
+          // Isometric soda can
+          g.appendChild(createSvgEl("rect", {
+            x: "-6.5", y: "-9", width: "13", height: "17", rx: "3.5",
+            fill: variantColor
+          }));
+          g.appendChild(createSvgEl("ellipse", {
+            cx: "0", cy: "-8.5", rx: "6", ry: "2.2",
+            fill: "var(--paper)"
+          }));
+          g.appendChild(createSvgEl("line", {
+            x1: "-4", y1: "-1", x2: "4", y2: "0",
+            stroke: "var(--paper)", "stroke-width": "2"
+          }));
+        } else if (type === "bottle") {
+          // Isometric drink bottle
+          g.appendChild(createSvgEl("path", {
+            d: "M -3.5,-13 L 3.5,-13 L 3.5,-8 L 6.5,-4 L 6.5,9 L -6.5,9 L -6.5,-4 L -3.5,-8 Z",
+            fill: variantColor
+          }));
+          g.appendChild(createSvgEl("rect", {
+            x: "-4", y: "-14.5", width: "8", height: "3", rx: "1",
+            fill: "var(--machine-dark)"
+          }));
+          g.appendChild(createSvgEl("rect", {
+            x: "-6", y: "-1", width: "12", height: "5",
+            fill: "var(--paper)"
+          }));
+        } else {
+          // Bar
+          g.appendChild(createSvgEl("polygon", {
+            points: "-9,-5 8,-3 7,7 -10,5",
+            fill: variantColor
+          }));
+          g.appendChild(createSvgEl("polygon", {
+            points: "-5,-4.5 3,-3.5 2,6.4 -6,5.4",
+            fill: "var(--paper)"
+          }));
+        }
+        return g;
+      }
+
+      // Main Component Factory
+      function mountMachine(el, options = {}) {
+        const cfg = Object.assign({
+          machine: "vending",
+          itemName: "Trail Mix",
+          slot: "B2",
+          price: 1.75,
+          credit: 2.50
+        }, options);
+
+        const priceStr = "$" + Number(cfg.price).toFixed(2);
+        const creditStr = "$" + Number(cfg.credit).toFixed(2);
+        const itemLower = cfg.itemName.toLowerCase();
+        const rowLetter = String(cfg.slot).charAt(0).toUpperCase() || "B";
+
+        // Build DOM skeleton
+        el.innerHTML = "";
+        const root = document.createElement("div");
+        root.className = "iso-machine";
+
+        const stage = document.createElement("div");
+        stage.className = "iso-machine-stage";
+
+        const svg = createSvgEl("svg", {
+          viewBox: "0 0 320 370",
+          class: "iso-machine-svg",
+          "aria-hidden": "true",
+          focusable: "false"
+        });
+
+        const captionBlock = document.createElement("div");
+        captionBlock.className = "iso-caption-block";
+
+        const captionEl = document.createElement("div");
+        captionEl.className = "iso-caption";
+
+        const sublineEl = document.createElement("div");
+        sublineEl.className = "iso-subline";
+        sublineEl.setAttribute("aria-live", "polite");
+
+        const actionBtn = document.createElement("button");
+        actionBtn.type = "button";
+        actionBtn.className = "iso-btn";
+
+        captionBlock.appendChild(captionEl);
+        captionBlock.appendChild(sublineEl);
+        captionBlock.appendChild(actionBtn);
+        stage.appendChild(svg);
+        root.appendChild(stage);
+        root.appendChild(captionBlock);
+        el.appendChild(root);
+
+        // ====================================================================
+        // BUILD 30-DEGREE ISOMETRIC VENDING MACHINE SVG
+        // ====================================================================
+        const defs = createSvgEl("defs");
+
+        // Clip path for the front glass window so light sweep stays inside glass
+        const glassClip = createSvgEl("clipPath", { id: "glass-clip-" + Math.random().toString(36).slice(2, 7) });
+        glassClip.appendChild(createSvgEl("polygon", {
+          points: "92,90 190,147 190,287 92,230"
+        }));
+        defs.appendChild(glassClip);
+
+        // Clip path for the collection bin interior
+        const binClip = createSvgEl("clipPath", { id: "bin-clip-" + Math.random().toString(36).slice(2, 7) });
+        binClip.appendChild(createSvgEl("polygon", {
+          points: "92,248 190,305 190,334 92,277"
+        }));
+        defs.appendChild(binClip);
+
+        svg.appendChild(defs);
+
+        // 1. Wide soft floor shadow (stays anchored on ground during shake)
+        const floorShadow = createSvgEl("polygon", {
+          points: "62,258 206,342 276,302 132,218",
+          fill: "var(--machine-dark)",
+          opacity: "0.10"
+        });
+        const floorShadowInner = createSvgEl("polygon", {
+          points: "72,255 204,332 262,298 130,221",
+          fill: "var(--machine-dark)",
+          opacity: "0.08"
+        });
+        svg.appendChild(floorShadow);
+        svg.appendChild(floorShadowInner);
+
+        // Machine Body Wrapper (for whole-machine error shake + 2-frame shake ghost trails)
+        const shakeTrail2 = createSvgEl("g", { opacity: "0", "pointer-events": "none" });
+        const shakeTrail1 = createSvgEl("g", { opacity: "0", "pointer-events": "none" });
+        const machineGroup = createSvgEl("g", {
+          "stroke-linejoin": "round",
+          "stroke-linecap": "round"
+        });
+        svg.appendChild(shakeTrail2);
+        svg.appendChild(shakeTrail1);
+        svg.appendChild(machineGroup);
+
+        // Short stub feet
+        const feetCoords = [
+          "80,244 92,251 92,259 80,252",
+          "212,320 226,328 226,336 212,328",
+          "264,296 276,289 276,297 264,304"
+        ];
+        feetCoords.forEach(pts => {
+          machineGroup.appendChild(createSvgEl("polygon", {
+            points: pts,
+            fill: "var(--machine-dark)",
+            stroke: "var(--machine-dark)",
+            "stroke-width": "1.5"
+          }));
+        });
+
+        // Main Isometric Cabinet Faces
+        // Top Roof Face
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "132,30 276,113 224,143 80,60",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        }));
+
+        // Front-Left Main Face (carries top sign band, glass window, and collection bin)
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "80,60 224,143 224,331 80,248",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        }));
+
+        // Right Depth Wall (slightly shaded with plate + dark overlay for crisp isometric corner)
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "224,143 276,113 276,301 224,331",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.6"
+        }));
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "224,143 276,113 276,301 224,331",
+          fill: "var(--machine-dark)",
+          opacity: "0.08",
+          "pointer-events": "none"
+        }));
+
+        // Darker Top Sign Band (across Front-Left & Right Wall)
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "80,60 224,143 224,163 80,80",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "224,143 276,113 276,133 224,163",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+        // Subtle geometric graphic bar inside top sign band
+        machineGroup.appendChild(createSvgEl("line", {
+          x1: "92", y1: "74", x2: "148", y2: "106",
+          stroke: "var(--plate)",
+          "stroke-width": "2.2",
+          opacity: "0.85"
+        }));
+        machineGroup.appendChild(createSvgEl("circle", {
+          cx: "210", cy: "142", r: "2.5",
+          fill: "var(--accent)"
+        }));
+
+        // Solid Right Control Column on the Front Face (x: 194..224)
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "194,146 224,163 224,331 194,314",
+          fill: "var(--machine-light)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // ====================================================================
+        // GLASS CAVITY & THREE STOCKED SHELVES
+        // ====================================================================
+        // Deep interior recess behind glass
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "92,90 190,147 190,287 92,230",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // Inner side wall seen in perspective inside the cabinet
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "92,90 112,78 112,218 92,230",
+          fill: "var(--machine-light)",
+          opacity: "0.22"
+        }));
+
+        // Shelf definitions (3 rows: A, B, C; 3 columns per row: 1, 2, 3)
+        const shelfRows = [
+          {
+            row: "A",
+            yLeft: 132,
+            yRight: 189,
+            items: [
+              { code: "A1", type: "can", color: "var(--paper)" },
+              { code: "A2", type: "can", color: "var(--plate)" },
+              { code: "A3", type: "bottle", color: "var(--paper)" }
+            ]
+          },
+          {
+            row: "B",
+            yLeft: 176,
+            yRight: 233,
+            items: [
+              { code: "B1", type: "packet", color: "var(--plate)" },
+              { code: "B2", type: "packet", color: "var(--accent)", isHero: true },
+              { code: "B3", type: "bar", color: "var(--paper)" }
+            ]
+          },
+          {
+            row: "C",
+            yLeft: 220,
+            yRight: 277,
+            items: [
+              { code: "C1", type: "bottle", color: "var(--plate)" },
+              { code: "C2", type: "can", color: "var(--accent)" },
+              { code: "C3", type: "packet", color: "var(--paper)" }
+            ]
+          }
+        ];
+
+        const shelvesGroup = createSvgEl("g");
+        machineGroup.appendChild(shelvesGroup);
+
+        let heroCoilPath = null;
+        let heroCoilTrail1 = null;
+        let heroCoilTrail2 = null;
+        let heroCoilCenter = { x: 141, y: 193 };
+        let heroItemGroup = null;
+        let heroTrail1 = null;
+        let heroTrail2 = null;
+        let heroBasePos = { x: 134, y: 196 };
+        const tagRefs = {};
+
+        shelfRows.forEach((shelf) => {
+          // Isometric shelf deck (tilted back into cabinet along -Z: dx=+16, dy=-9)
+          const x1 = 92, y1 = shelf.yLeft;
+          const x2 = 190, y2 = shelf.yRight;
+          shelvesGroup.appendChild(createSvgEl("polygon", {
+            points: `${x1},${y1} ${x2},${y2} ${x2 + 14},${y2 - 8} ${x1 + 14},${y1 - 8}`,
+            fill: "var(--machine-light)",
+            opacity: "0.35",
+            stroke: "var(--machine-dark)",
+            "stroke-width": "1.2"
+          }));
+
+          // Front lip of the shelf (carries the A1, A2, B2 tags)
+          shelvesGroup.appendChild(createSvgEl("polygon", {
+            points: `${x1},${y1} ${x2},${y2} ${x2},${y2 + 8} ${x1},${y1 + 8}`,
+            fill: "var(--machine-dark)",
+            stroke: "var(--machine-dark)",
+            "stroke-width": "1.2"
+          }));
+
+          // 3 Slots across the shelf
+          const uPositions = [0.20, 0.52, 0.82];
+          shelf.items.forEach((slotItem, idx) => {
+            const u = uPositions[idx];
+            const slotX = x1 + (x2 - x1) * u;
+            const slotY = y1 + (y2 - y1) * u;
+
+            // Coil sits slightly behind the item
+            const coilCx = slotX + 7;
+            const coilCy = slotY - 12;
+
+            if (slotItem.isHero) {
+              heroCoilCenter = { x: coilCx, y: coilCy };
+              heroCoilTrail2 = createSvgEl("path", {
+                d: buildCoilPath(coilCx, coilCy, 0),
+                fill: "none",
+                stroke: "var(--paper)",
+                "stroke-width": "1.4",
+                opacity: "0"
+              });
+              heroCoilTrail1 = createSvgEl("path", {
+                d: buildCoilPath(coilCx, coilCy, 0),
+                fill: "none",
+                stroke: "var(--paper)",
+                "stroke-width": "1.4",
+                opacity: "0"
+              });
+              heroCoilPath = createSvgEl("path", {
+                d: buildCoilPath(coilCx, coilCy, 0),
+                fill: "none",
+                stroke: "var(--paper)",
+                "stroke-width": "1.5",
+                opacity: "0.85"
+              });
+              shelvesGroup.appendChild(heroCoilTrail2);
+              shelvesGroup.appendChild(heroCoilTrail1);
+              shelvesGroup.appendChild(heroCoilPath);
+            } else {
+              shelvesGroup.appendChild(createSvgEl("path", {
+                d: buildCoilPath(coilCx, coilCy, idx * 1.1),
+                fill: "none",
+                stroke: "var(--machine-light)",
+                "stroke-width": "1.3",
+                opacity: "0.55"
+              }));
+            }
+
+            // Item sitting in front of the coil
+            const itemX = slotX - 2;
+            const itemY = slotY - 9;
+
+            if (slotItem.isHero) {
+              heroBasePos = { x: itemX, y: itemY };
+              // Create 2-frame fade trails for the hero item
+              heroTrail2 = createSvgEl("g", { opacity: "0", "pointer-events": "none" });
+              heroTrail2.appendChild(createSnackGraphic(slotItem.type, slotItem.color));
+
+              heroTrail1 = createSvgEl("g", { opacity: "0", "pointer-events": "none" });
+              heroTrail1.appendChild(createSnackGraphic(slotItem.type, slotItem.color));
+
+              heroItemGroup = createSvgEl("g", {
+                transform: `translate(${itemX.toFixed(1)}, ${itemY.toFixed(1)})`
+              });
+              heroItemGroup.appendChild(createSnackGraphic(slotItem.type, slotItem.color));
+
+              shelvesGroup.appendChild(heroTrail2);
+              shelvesGroup.appendChild(heroTrail1);
+              shelvesGroup.appendChild(heroItemGroup);
+            } else {
+              const staticItem = createSvgEl("g", {
+                transform: `translate(${itemX.toFixed(1)}, ${itemY.toFixed(1)})`
+              });
+              staticItem.appendChild(createSnackGraphic(slotItem.type, slotItem.color));
+              shelvesGroup.appendChild(staticItem);
+            }
+
+            // Tiny letter-number slot tag under the item on the shelf lip
+            const tagGroup = createSvgEl("g", {
+              transform: `translate(${slotX.toFixed(1)}, ${(slotY + 4).toFixed(1)})`
+            });
+            const tagBg = createSvgEl("polygon", {
+              points: "-7,-4.5 7,3.5 7,9.5 -7,1.5",
+              fill: "var(--machine-dark)",
+              stroke: "var(--machine-light)",
+              "stroke-width": "0.8"
+            });
+            const labelCode = slotItem.isHero ? cfg.slot : slotItem.code;
+            const tagText = createSvgEl("text", {
+              x: "0",
+              y: "4.2",
+              fill: "var(--paper)",
+              "font-size": "5.5",
+              "font-weight": "700",
+              "text-anchor": "middle",
+              transform: "skewY(30)"
+            });
+            tagText.textContent = labelCode;
+            tagGroup.appendChild(tagBg);
+            tagGroup.appendChild(tagText);
+            shelvesGroup.appendChild(tagGroup);
+
+            tagRefs[slotItem.isHero ? "HERO" : slotItem.code] = { bg: tagBg, text: tagText };
+          });
+        });
+
+        // Vertical Gravity Smear Trail (used during the high-speed drop)
+        const fallSmearGroup = createSvgEl("g", { opacity: "0", "pointer-events": "none" });
+        fallSmearGroup.appendChild(createSvgEl("line", {
+          x1: "0", y1: "-26", x2: "0", y2: "0",
+          stroke: "var(--accent)",
+          "stroke-width": "9",
+          "stroke-linecap": "round",
+          opacity: "0.22"
+        }));
+        fallSmearGroup.appendChild(createSvgEl("line", {
+          x1: "-4", y1: "-18", x2: "-4", y2: "2",
+          stroke: "var(--paper)",
+          "stroke-width": "3",
+          "stroke-linecap": "round",
+          opacity: "0.35"
+        }));
+        shelvesGroup.appendChild(fallSmearGroup);
+
+        // ====================================================================
+        // COLLECTION BIN (BOTTOM RECESS + FLAP WITH ACCENT EDGE)
+        // ====================================================================
+        const binGroup = createSvgEl("g");
+        machineGroup.appendChild(binGroup);
+
+        // Dark recess cavity
+        binGroup.appendChild(createSvgEl("polygon", {
+          points: "92,248 190,305 190,334 92,277",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        }));
+
+        // Inner bin floor in perspective
+        binGroup.appendChild(createSvgEl("polygon", {
+          points: "92,277 190,334 202,327 104,270",
+          fill: "var(--machine-light)",
+          opacity: "0.18"
+        }));
+
+        // Layer where the dispensed item lands inside the bin (behind the translucent flap)
+        const binItemHolder = createSvgEl("g", {
+          "clip-path": `url(#${binClip.id})`
+        });
+        binGroup.appendChild(binItemHolder);
+
+        // Translucent swing flap over the top half of the bin
+        const binFlap = createSvgEl("polygon", {
+          points: "94,250 188,305 188,324 94,269",
+          fill: "var(--plate)",
+          opacity: "0.22",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.2"
+        });
+        binGroup.appendChild(binFlap);
+
+        // Thin warm accent edge line along the bottom of the bin flap
+        const binFlapEdge = createSvgEl("line", {
+          x1: "94", y1: "269", x2: "188", y2: "324",
+          stroke: "var(--accent)",
+          "stroke-width": "2.2",
+          "stroke-linecap": "round"
+        });
+        binGroup.appendChild(binFlapEdge);
+
+        // ====================================================================
+        // FRONT GLASS WINDOW OVERLAY + PERIODIC IDLE LIGHT SWEEP
+        // ====================================================================
+        const glassPane = createSvgEl("polygon", {
+          points: "92,90 190,147 190,287 92,230",
+          fill: "var(--plate)",
+          opacity: "0.18",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.5"
+        });
+        machineGroup.appendChild(glassPane);
+
+        // Clipped diagonal sheen that sweeps across the glass in idle state
+        const glassSweepWrapper = createSvgEl("g", {
+          "clip-path": `url(#${glassClip.id})`,
+          "pointer-events": "none"
+        });
+        const glassSweepBand = createSvgEl("polygon", {
+          points: "-60,60 -25,60 45,320 10,320",
+          fill: "var(--paper)",
+          opacity: "0.28"
+        });
+        glassSweepWrapper.appendChild(glassSweepBand);
+        machineGroup.appendChild(glassSweepWrapper);
+
+        // ====================================================================
+        // RIGHT CONTROL COLUMN: DIGITAL DISPLAY, 3x3 KEYPAD, COIN SLOT
+        // ====================================================================
+        // Digital Display Bezel (isometric parallelogram on right column)
+        const displayBezel = createSvgEl("polygon", {
+          points: "197,158 221,172 221,189 197,175",
+          fill: "var(--machine-dark)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4"
+        });
+        machineGroup.appendChild(displayBezel);
+
+        // Digital text inside display (skewed +30deg to sit flush on the front isometric plane)
+        const displayTextGroup = createSvgEl("g", {
+          transform: "translate(209, 175.5) skewY(30)"
+        });
+        const displayText = createSvgEl("text", {
+          x: "0",
+          y: "2.2",
+          fill: "var(--accent)",
+          "font-size": "6.3",
+          "font-weight": "700",
+          "text-anchor": "middle",
+          "letter-spacing": "-0.2"
+        });
+        displayText.textContent = creditStr;
+        displayTextGroup.appendChild(displayText);
+        machineGroup.appendChild(displayTextGroup);
+
+        // 3x3 Isometric Keypad
+        const keypadGroup = createSvgEl("g");
+        for (let r = 0; r < 3; r++) {
+          for (let c = 0; c < 3; c++) {
+            const kx = 198.5 + c * 7.2;
+            const ky = 186 + c * 4.15 + r * 7.5;
+            const keyPoly = createSvgEl("polygon", {
+              points: `${kx},${ky} ${kx + 5.2},${ky + 3} ${kx + 5.2},${ky + 8.2} ${kx},${ky + 5.2}`,
+              fill: (r === 1 && c === 1) ? "var(--plate)" : "var(--paper)",
+              stroke: "var(--machine-dark)",
+              "stroke-width": "1.1"
+            });
+            keypadGroup.appendChild(keyPoly);
+          }
+        }
+        machineGroup.appendChild(keypadGroup);
+
+        // Coin Slot Bezel & Vertical Slit
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "202,222 216,230 216,246 202,238",
+          fill: "var(--machine-dark)",
+          opacity: "0.16",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.2"
+        }));
+        // Actual coin slot opening around (209, 234)
+        machineGroup.appendChild(createSvgEl("line", {
+          x1: "209", y1: "229", x2: "209", y2: "238",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "2.2",
+          "stroke-linecap": "round"
+        }));
+        // Small coin return button below slot
+        machineGroup.appendChild(createSvgEl("polygon", {
+          points: "206,244 212,247.5 212,252.5 206,249",
+          fill: "var(--accent)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1"
+        }));
+
+        // Animated Coin + 2-frame motion trails (drops into slot at 209, 233)
+        const coinTrail2 = createSvgEl("ellipse", {
+          cx: "209", cy: "205", rx: "4.2", ry: "5.2",
+          fill: "var(--accent)", opacity: "0"
+        });
+        const coinTrail1 = createSvgEl("ellipse", {
+          cx: "209", cy: "205", rx: "4.2", ry: "5.2",
+          fill: "var(--accent)", opacity: "0"
+        });
+        const coinEl = createSvgEl("ellipse", {
+          cx: "209", cy: "205", rx: "4.2", ry: "5.2",
+          fill: "var(--paper)",
+          stroke: "var(--machine-dark)",
+          "stroke-width": "1.4",
+          opacity: "0"
+        });
+        machineGroup.appendChild(coinTrail2);
+        machineGroup.appendChild(coinTrail1);
+        machineGroup.appendChild(coinEl);
+
+        // ====================================================================
+        // STATE DEFINITIONS & COPY (DATA-DRIVEN, NEVER HARD-CODED IN SVG)
+        // ====================================================================
+        const STATE_META = {
+          "idle": {
+            caption: "Pick something good",
+            subline: `${creditStr} credit, snacks on row ${rowLetter}`,
+            button: `Vend ${cfg.slot}`,
+            display: creditStr
+          },
+          "working, crediting": {
+            caption: "Credit in",
+            subline: "Coins accepted",
+            button: null,
+            display: creditStr
+          },
+          "working, winding": {
+            caption: `Vending your ${itemLower}`,
+            subline: `${cfg.slot}, ${priceStr}`,
+            button: null,
+            display: cfg.slot
+          },
+          "working, dropping": {
+            caption: "On its way down",
+            subline: cfg.itemName,
+            button: null,
+            display: cfg.slot
+          },
+          "done": {
+            caption: `${cfg.itemName} is yours`,
+            subline: `Waiting in the collection bin`,
+            button: "Take item",
+            display: cfg.itemName.slice(0, 6).toUpperCase()
+          },
+          "error": {
+            caption: `Your ${itemLower} got stuck`,
+            subline: "No charge made",
+            button: "Shake it loose",
+            display: "STUCK"
+          }
+        };
+
+        // ====================================================================
+        // ANIMATION ENGINE & POSE RENDERERS
+        // ====================================================================
+        let currentState = "idle";
+        let rafId = null;
+        let stateStartTime = performance.now();
+        let playActive = false;
+        let shakeRecovering = false;
+        let historyBuffer = []; // Stores last frames for genuine 2-frame staggered fade trails
+
+        const prefersReducedMotion = () =>
+          window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        function highlightHeroTag(active) {
+          const heroTag = tagRefs["HERO"];
+          if (!heroTag) return;
+          heroTag.bg.setAttribute("fill", active ? "var(--accent)" : "var(--machine-dark)");
+          heroTag.bg.setAttribute("stroke", active ? "var(--accent)" : "var(--machine-light)");
+        }
+
+        function setDisplayStyle(text, isErrorTint = false) {
+          displayText.textContent = text;
+          if (isErrorTint) {
+            displayBezel.setAttribute("fill", "var(--accent)");
+            displayText.setAttribute("fill", "var(--paper)");
+          } else {
+            displayBezel.setAttribute("fill", "var(--machine-dark)");
+            displayText.setAttribute("fill", "var(--accent)");
+          }
+        }
+
+        function resetVisualTransforms() {
+          historyBuffer = [];
+          machineGroup.setAttribute("transform", "translate(0, 0) rotate(0)");
+          shakeTrail1.setAttribute("opacity", "0");
+          shakeTrail2.setAttribute("opacity", "0");
+
+          // Put hero item back on shelf B2
+          if (heroItemGroup.parentNode !== shelvesGroup) {
+            shelvesGroup.appendChild(heroItemGroup);
+          }
+          heroItemGroup.setAttribute("transform", `translate(${heroBasePos.x}, ${heroBasePos.y}) rotate(0)`);
+          heroItemGroup.setAttribute("opacity", "1");
+          heroTrail1.setAttribute("opacity", "0");
+          heroTrail2.setAttribute("opacity", "0");
+          fallSmearGroup.setAttribute("opacity", "0");
+
+          // Reset coil
+          heroCoilPath.setAttribute("d", buildCoilPath(heroCoilCenter.x, heroCoilCenter.y, 0));
+          heroCoilTrail1.setAttribute("opacity", "0");
+          heroCoilTrail2.setAttribute("opacity", "0");
+
+          // Reset coin
+          coinEl.setAttribute("opacity", "0");
+          coinTrail1.setAttribute("opacity", "0");
+          coinTrail2.setAttribute("opacity", "0");
+
+          // Reset glass sweep & bin flap
+          glassSweepBand.setAttribute("transform", "translate(-90, 0)");
+          binFlapEdge.setAttribute("stroke-width", "2.2");
+          binFlap.setAttribute("opacity", "0.22");
+        }
+
+        function placeItemInBin(offsetY = 0, rot = -18) {
+          if (heroItemGroup.parentNode !== binItemHolder) {
+            binItemHolder.appendChild(heroItemGroup);
+          }
+          const binX = 142;
+          const binY = 304 + offsetY;
+          heroItemGroup.setAttribute("transform", `translate(${binX}, ${binY.toFixed(1)}) rotate(${rot.toFixed(1)})`);
+        }
+
+        // Apply 2-frame trail helper for the hero snack item
+        function updateHeroItemWithTrail(x, y, deg, showTrail = true) {
+          const prev1 = historyBuffer[historyBuffer.length - 1];
+          const prev2 = historyBuffer[historyBuffer.length - 2];
+
+          heroItemGroup.setAttribute("transform", `translate(${x.toFixed(2)}, ${y.toFixed(2)}) rotate(${deg.toFixed(2)})`);
+
+          if (showTrail && prev1) {
+            heroTrail1.setAttribute("transform", `translate(${prev1.x.toFixed(2)}, ${prev1.y.toFixed(2)}) rotate(${prev1.deg.toFixed(2)})`);
+            heroTrail1.setAttribute("opacity", "0.34");
+          } else {
+            heroTrail1.setAttribute("opacity", "0");
+          }
+
+          if (showTrail && prev2) {
+            heroTrail2.setAttribute("transform", `translate(${prev2.x.toFixed(2)}, ${prev2.y.toFixed(2)}) rotate(${prev2.deg.toFixed(2)})`);
+            heroTrail2.setAttribute("opacity", "0.16");
+          } else {
+            heroTrail2.setAttribute("opacity", "0");
+          }
+
+          historyBuffer.push({ x, y, deg });
+          if (historyBuffer.length > 4) historyBuffer.shift();
+        }
+
+        // Apply 2-frame trail for the rotating spiral coil
+        let coilHistory = [];
+        function updateHeroCoilWithTrail(phaseRad, showTrail = true) {
+          const prev1 = coilHistory[coilHistory.length - 1];
+          const prev2 = coilHistory[coilHistory.length - 2];
+
+          heroCoilPath.setAttribute("d", buildCoilPath(heroCoilCenter.x, heroCoilCenter.y, phaseRad));
+
+          if (showTrail && prev1 !== undefined && Math.abs(phaseRad - prev1) > 0.04) {
+            heroCoilTrail1.setAttribute("d", buildCoilPath(heroCoilCenter.x, heroCoilCenter.y, prev1));
+            heroCoilTrail1.setAttribute("opacity", "0.32");
+          } else {
+            heroCoilTrail1.setAttribute("opacity", "0");
+          }
+
+          if (showTrail && prev2 !== undefined && Math.abs(phaseRad - prev2) > 0.04) {
+            heroCoilTrail2.setAttribute("d", buildCoilPath(heroCoilCenter.x, heroCoilCenter.y, prev2));
+            heroCoilTrail2.setAttribute("opacity", "0.15");
+          } else {
+            heroCoilTrail2.setAttribute("opacity", "0");
+          }
+
+          coilHistory.push(phaseRad);
+          if (coilHistory.length > 4) coilHistory.shift();
+        }
+
+        // Renders specific phases for both timeline loop and manual setProgress(0..1)
+        function renderCreditingPhase(u) {
+          // Coin drops from y=196 into slot at y=233 with a single crisp bounce
+          highlightHeroTag(u > 0.35);
+
+          let coinY = 196;
+          let coinAlpha = 1;
+          if (u < 0.45) {
+            const t = easeInQuad(u / 0.45);
+            coinY = 196 + t * 37;
+          } else if (u < 0.70) {
+            // Little bounce up and back down
+            const b = (u - 0.45) / 0.25;
+            const arc = 4 * b * (1 - b);
+            coinY = 233 - arc * 9;
+          } else if (u < 0.88) {
+            // Slips inside the slot
+            const s = (u - 0.70) / 0.18;
+            coinY = 233 + s * 3;
+            coinAlpha = 1 - s;
+          } else {
+            coinAlpha = 0;
+          }
+
+          coinEl.setAttribute("cy", coinY.toFixed(1));
+          coinEl.setAttribute("opacity", coinAlpha.toFixed(2));
+
+          if (coinAlpha > 0.1 && u < 0.72) {
+            coinTrail1.setAttribute("cy", (coinY - 4.5).toFixed(1));
+            coinTrail1.setAttribute("opacity", (coinAlpha * 0.35).toFixed(2));
+            coinTrail2.setAttribute("cy", (coinY - 9).toFixed(1));
+            coinTrail2.setAttribute("opacity", (coinAlpha * 0.16).toFixed(2));
+          } else {
+            coinTrail1.setAttribute("opacity", "0");
+            coinTrail2.setAttribute("opacity", "0");
+          }
+
+          // Count credit up digit by digit
+          const countedVal = easeOutCubic(Math.min(1, u / 0.85)) * cfg.credit;
+          setDisplayStyle("$" + countedVal.toFixed(2), false);
+        }
+
+        function renderWindingPhase(u) {
+          // 3 distinct stepped turns of the spiral coil; item lags slightly behind coil (weight before motion)
+          highlightHeroTag(true);
+          setDisplayStyle(cfg.slot, false);
+
+          const pulses = 3;
+          const scaled = u * pulses;
+          const pulseIdx = Math.min(pulses - 1, Math.floor(scaled));
+          const pulseFrac = scaled - pulseIdx;
+
+          // Coil rotates with easeInOutCubic on each turn, pausing briefly at the end of each revolution
+          const coilTurnProgress = pulseIdx + easeInOutCubic(Math.min(1, pulseFrac / 0.82));
+          const phaseRad = coilTurnProgress * Math.PI * 2;
+          updateHeroCoilWithTrail(phaseRad, true);
+
+          // Item lags a beat behind the coil (starts moving after 0.12 of each pulse)
+          const laggedFrac = Math.max(0, (pulseFrac - 0.12) / 0.76);
+          const itemCreepStep = (pulseIdx + easeOutCubic(Math.min(1, laggedFrac))) / pulses;
+
+          // Creeps forward-left (+Z isometric axis: dx = -10, dy = +6) and tilts slightly on the final turn
+          const dx = -10.5 * itemCreepStep;
+          const dy = 6.2 * itemCreepStep;
+          const tilt = itemCreepStep > 0.65 ? easeInOutCubic((itemCreepStep - 0.65) / 0.35) * -12 : 0;
+
+          updateHeroItemWithTrail(heroBasePos.x + dx, heroBasePos.y + dy, tilt, true);
+        }
+
+        function renderDroppingPhase(u) {
+          highlightHeroTag(true);
+          setDisplayStyle(cfg.slot, false);
+
+          const startX = heroBasePos.x - 10.5;
+          const startY = heroBasePos.y + 6.2;
+          const targetBinX = 142;
+          const targetBinY = 304;
+
+          if (u < 0.22) {
+            // Tips off the shelf edge & pauses a beat
+            const t = easeOutCubic(u / 0.22);
+            const tilt = -12 - t * 22;
+            updateHeroItemWithTrail(startX - t * 2, startY + t * 3, tilt, true);
+            fallSmearGroup.setAttribute("opacity", "0");
+          } else if (u < 0.72) {
+            // Gravity ease-in fall with vertical smear trail
+            const f = (u - 0.22) / 0.50;
+            const grav = easeInQuad(f);
+            const curX = startX - 2 + (targetBinX - (startX - 2)) * grav;
+            const curY = startY + 3 + (targetBinY - (startY + 3)) * grav;
+            const rot = -34 + grav * 16;
+
+            if (f > 0.68 && heroItemGroup.parentNode !== binItemHolder) {
+              binItemHolder.appendChild(heroItemGroup);
+            }
+            updateHeroItemWithTrail(curX, curY, rot, true);
+
+            // Position vertical smear right above the falling item
+            fallSmearGroup.setAttribute("transform", `translate(${curX.toFixed(1)}, ${curY.toFixed(1)})`);
+            fallSmearGroup.setAttribute("opacity", (Math.sin(f * Math.PI) * 0.95).toFixed(2));
+          } else {
+            // Hits the bin with one small bounce and flashes the flap accent edge once
+            fallSmearGroup.setAttribute("opacity", "0");
+            heroTrail1.setAttribute("opacity", "0");
+            heroTrail2.setAttribute("opacity", "0");
+
+            const b = (u - 0.72) / 0.28;
+            const bounceOffset = -Math.sin(b * Math.PI) * 9 * (1 - b * 0.4);
+            placeItemInBin(bounceOffset, -18 + Math.sin(b * Math.PI) * 5);
+
+            // Flap edge flash
+            const flash = Math.sin(b * Math.PI);
+            binFlapEdge.setAttribute("stroke-width", (2.2 + flash * 3.2).toFixed(2));
+            binFlap.setAttribute("opacity", (0.22 + flash * 0.25).toFixed(2));
+          }
+        }
+
+        function renderStuckErrorPhase(elapsedMs) {
+          highlightHeroTag(true);
+          setDisplayStyle("STUCK", true);
+
+          // Item hangs half off the shelf, caught on its coil at a precarious -28deg angle
+          const stuckX = heroBasePos.x - 11.5;
+          const stuckY = heroBasePos.y + 8.5;
+          heroCoilPath.setAttribute("d", buildCoilPath(heroCoilCenter.x, heroCoilCenter.y, 1.35));
+
+          // Whole machine shakes side to side twice with a decaying wobble over 900ms, then stops
+          const duration = 920;
+          if (elapsedMs < duration) {
+            const t = elapsedMs / duration;
+            const decay = Math.pow(1 - t, 2.1);
+            // 2 full side-to-side cycles (4*PI)
+            const wave = Math.sin(t * Math.PI * 4);
+            const dx = wave * 7.5 * decay;
+            const rot = wave * 1.1 * decay;
+
+            machineGroup.setAttribute("transform", `translate(${dx.toFixed(2)}, 0) rotate(${rot.toFixed(2)}, 175, 220)`);
+
+            // Nudge the stuck item slightly with the wobble
+            const itemWobble = -28 + wave * 6 * decay;
+            updateHeroItemWithTrail(stuckX, stuckY, itemWobble, true);
+          } else {
+            machineGroup.setAttribute("transform", "translate(0, 0) rotate(0)");
+            updateHeroItemWithTrail(stuckX, stuckY, -28, false);
+          }
+        }
+
+        // Main animation loop for ambient / active state playback
+        function tick(now) {
+          const elapsed = now - stateStartTime;
+
+          if (playActive) {
+            // Timed 3.6s full checkout cycle: crediting -> winding -> dropping -> done
+            const totalDuration = 3600;
+            const u = Math.min(1, elapsed / totalDuration);
+
+            if (u < 0.25) {
+              syncCaptionForState("working, crediting");
+              renderCreditingPhase(u / 0.25);
+            } else if (u < 0.74) {
+              syncCaptionForState("working, winding");
+              coinEl.setAttribute("opacity", "0");
+              coinTrail1.setAttribute("opacity", "0");
+              coinTrail2.setAttribute("opacity", "0");
+              renderWindingPhase((u - 0.25) / 0.49);
+            } else if (u < 0.96) {
+              syncCaptionForState("working, dropping");
+              renderDroppingPhase((u - 0.74) / 0.22);
+            } else {
+              playActive = false;
+              setState("done");
+              return;
+            }
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+
+          if (shakeRecovering) {
+            // "Shake it loose" recovery: brisk shake (0..380ms), then gravity drop (380..950ms), then "done"
+            if (elapsed < 380) {
+              const t = elapsed / 380;
+              const wave = Math.sin(t * Math.PI * 4) * (1 - t * 0.5);
+              machineGroup.setAttribute("transform", `translate(${(wave * 8).toFixed(2)}, 0)`);
+              updateHeroItemWithTrail(heroBasePos.x - 11.5, heroBasePos.y + 8.5, -28 + wave * 10, true);
+            } else if (elapsed < 960) {
+              machineGroup.setAttribute("transform", "translate(0, 0)");
+              const dropU = (elapsed - 380) / 580;
+              renderDroppingPhase(dropU);
+            } else {
+              shakeRecovering = false;
+              setState("done");
+              return;
+            }
+            rafId = requestAnimationFrame(tick);
+            return;
+          }
+
+          // Individual looping / animated states when selected directly
+          if (currentState === "idle") {
+            // Periodic faint sweep of light across the glass once every 4.2s
+            const cycle = elapsed % 4200;
+            if (cycle < 1300) {
+              const s = easeInOutCubic(cycle / 1300);
+              const sweepX = -70 + s * 310;
+              glassSweepBand.setAttribute("transform", `translate(${sweepX.toFixed(1)}, 0)`);
+            } else {
+              glassSweepBand.setAttribute("transform", "translate(-90, 0)");
+            }
+            // Alternate display gently between credit and SELECT
+            const showSelect = Math.floor(elapsed / 2600) % 2 === 1;
+            setDisplayStyle(showSelect ? "SELECT" : creditStr, false);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "working, crediting") {
+            const u = Math.min(1, (elapsed % 1800) / 1400);
+            renderCreditingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "working, winding") {
+            const u = (elapsed % 2400) / 2400;
+            renderWindingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "working, dropping") {
+            const u = Math.min(1, (elapsed % 1500) / 1100);
+            renderDroppingPhase(u);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "error") {
+            renderStuckErrorPhase(elapsed);
+            if (elapsed < 1050) {
+              rafId = requestAnimationFrame(tick);
+            }
+          }
+        }
+
+        function syncCaptionForState(stateName) {
+          const meta = STATE_META[stateName] || STATE_META["idle"];
+          if (captionEl.textContent !== meta.caption) {
+            captionEl.textContent = meta.caption;
+          }
+          if (sublineEl.textContent !== meta.subline) {
+            sublineEl.textContent = meta.subline;
+          }
+          if (meta.button) {
+            actionBtn.textContent = meta.button;
+            actionBtn.hidden = false;
+          } else {
+            actionBtn.hidden = true;
+          }
+        }
+
+        // Public API: setState(name)
+        function setState(name) {
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          playActive = false;
+          shakeRecovering = false;
+
+          // Normalize short aliases ("crediting", "winding", "dropping", "error, the stuck item")
+          const normalized = String(name).trim().toLowerCase();
+          if (normalized === "crediting" || normalized === "working, crediting") {
+            currentState = "working, crediting";
+          } else if (normalized === "winding" || normalized === "working, winding") {
+            currentState = "working, winding";
+          } else if (normalized === "dropping" || normalized === "working, dropping") {
+            currentState = "working, dropping";
+          } else if (normalized.startsWith("error")) {
+            currentState = "error";
+          } else if (normalized === "done") {
+            currentState = "done";
+          } else {
+            currentState = "idle";
+          }
+
+          // Respect prefers-reduced-motion: collapse directly to static done-state pose
+          if (prefersReducedMotion()) {
+            resetVisualTransforms();
+            highlightHeroTag(false);
+            placeItemInBin(0, -18);
+            syncCaptionForState("done");
+            setDisplayStyle(STATE_META["done"].display, false);
+            return;
+          }
+
+          resetVisualTransforms();
+          stateStartTime = performance.now();
+          syncCaptionForState(currentState);
+
+          if (currentState === "idle") {
+            highlightHeroTag(false);
+            setDisplayStyle(creditStr, false);
+            rafId = requestAnimationFrame(tick);
+          } else if (currentState === "done") {
+            highlightHeroTag(false);
+            placeItemInBin(0, -18);
+            setDisplayStyle(STATE_META["done"].display, false);
+          } else {
+            rafId = requestAnimationFrame(tick);
+          }
+        }
+
+        // Public API: setProgress(0..1)
+        // Drives credit count-up, coil rotation, and item creep together; drops near 1
+        function setProgress(value) {
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+          playActive = false;
+          shakeRecovering = false;
+
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+
+          const p = Math.max(0, Math.min(1, Number(value) || 0));
+          resetVisualTransforms();
+
+          if (p <= 0.001) {
+            currentState = "idle";
+            syncCaptionForState("idle");
+            highlightHeroTag(false);
+            setDisplayStyle(creditStr, false);
+          } else if (p < 0.25) {
+            currentState = "working, crediting";
+            syncCaptionForState("working, crediting");
+            renderCreditingPhase(p / 0.25);
+          } else if (p < 0.85) {
+            currentState = "working, winding";
+            syncCaptionForState("working, winding");
+            renderWindingPhase((p - 0.25) / 0.60);
+          } else if (p < 0.995) {
+            currentState = "working, dropping";
+            syncCaptionForState("working, dropping");
+            renderDroppingPhase((p - 0.85) / 0.145);
+          } else {
+            setState("done");
+          }
+        }
+
+        // Public API: play()
+        // Runs a timed 3.6-second cycle through crediting, winding, dropping, done
+        function play() {
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+          if (rafId) cancelAnimationFrame(rafId);
+          resetVisualTransforms();
+          playActive = true;
+          shakeRecovering = false;
+          stateStartTime = performance.now();
+          rafId = requestAnimationFrame(tick);
+        }
+
+        // Shake recovery when stuck in error state
+        function shakeLoose() {
+          if (prefersReducedMotion()) {
+            setState("done");
+            return;
+          }
+          if (rafId) cancelAnimationFrame(rafId);
+          playActive = false;
+          shakeRecovering = true;
+          stateStartTime = performance.now();
+          captionEl.textContent = "Shaking it loose";
+          sublineEl.textContent = cfg.itemName;
+          actionBtn.hidden = true;
+          rafId = requestAnimationFrame(tick);
+        }
+
+        // Wire contextual button inside the component caption block
+        actionBtn.addEventListener("click", () => {
+          if (currentState === "idle") {
+            play();
+          } else if (currentState === "error") {
+            shakeLoose();
+          } else if (currentState === "done") {
+            setState("idle");
+          }
+        });
+
+        // Initialize in idle state
+        setState("idle");
+
+        return {
+          setState,
+          setProgress,
+          play,
+          shakeLoose,
+          destroy() {
+            if (rafId) cancelAnimationFrame(rafId);
+            el.innerHTML = "";
+          }
+        };
+      }
+
+      // Expose globally per family convention
+      window.mountMachine = mountMachine;
+
+      // ======================================================================
+      // BOOTSTRAP: SINGLE COMPONENT VIEW OR ?demo=1 HARNESS
+      // ======================================================================
+      const appRoot = document.getElementById("app-root");
+      const toggleDemoBtn = document.getElementById("toggle-demo-btn");
+      const modeBadge = document.getElementById("mode-badge");
+      let activeInstances = [];
+
+      function clearInstances() {
+        activeInstances.forEach(inst => inst.destroy && inst.destroy());
+        activeInstances = [];
+        appRoot.innerHTML = "";
+      }
+
+      function renderSingleView() {
+        clearInstances();
+        modeBadge.textContent = "Single Machine";
+        toggleDemoBtn.textContent = "Open 6-State Demo Harness (?demo=1)";
+
+        const wrap = document.createElement("div");
+        wrap.className = "single-stage-wrap";
+
+        const mountTarget = document.createElement("div");
+        mountTarget.style.width = "100%";
+        mountTarget.style.display = "flex";
+        mountTarget.style.justifyContent = "center";
+        wrap.appendChild(mountTarget);
+
+        const machine = mountMachine(mountTarget, {
+          machine: "vending",
+          itemName: "Trail Mix",
+          slot: "B2",
+          price: 1.75,
+          credit: 2.50
+        });
+        activeInstances.push(machine);
+
+        // Quick state bar for testing in single view
+        const toolbar = document.createElement("div");
+        toolbar.className = "single-toolbar";
+
+        const playBtn = document.createElement("button");
+        playBtn.type = "button";
+        playBtn.className = "demo-pill active";
+        playBtn.textContent = "Play Full Cycle (3.6s)";
+        playBtn.addEventListener("click", () => machine.play());
+        toolbar.appendChild(playBtn);
+
+        const stickBtn = document.createElement("button");
+        stickBtn.type = "button";
+        stickBtn.className = "demo-pill danger";
+        stickBtn.textContent = "Stick it";
+        stickBtn.addEventListener("click", () => machine.setState("error"));
+        toolbar.appendChild(stickBtn);
+
+        wrap.appendChild(toolbar);
+        appRoot.appendChild(wrap);
+      }
+
+      function renderDemoHarness() {
+        clearInstances();
+        modeBadge.textContent = "Demo Harness (?demo=1)";
+        toggleDemoBtn.textContent = "Exit Demo Harness";
+
+        // Top interactive control bar: Progress Slider + Play + Stick it
+        const sliderBar = document.createElement("div");
+        sliderBar.className = "demo-slider-bar";
+
+        const sliderGroup = document.createElement("div");
+        sliderGroup.className = "slider-group";
+
+        const sliderLabel = document.createElement("label");
+        sliderLabel.setAttribute("for", "demo-progress-range");
+        sliderLabel.textContent = "setProgress(0..1)";
+
+        const rangeInput = document.createElement("input");
+        rangeInput.id = "demo-progress-range";
+        rangeInput.type = "range";
+        rangeInput.min = "0";
+        rangeInput.max = "1";
+        rangeInput.step = "0.005";
+        rangeInput.value = "0";
+
+        const sliderVal = document.createElement("span");
+        sliderVal.className = "slider-val";
+        sliderVal.textContent = "0.00";
+
+        sliderGroup.appendChild(sliderLabel);
+        sliderGroup.appendChild(rangeInput);
+        sliderGroup.appendChild(sliderVal);
+
+        const actionGroup = document.createElement("div");
+        actionGroup.className = "demo-controls";
+
+        const playAllBtn = document.createElement("button");
+        playAllBtn.type = "button";
+        playAllBtn.className = "demo-pill";
+        playAllBtn.textContent = "play() All Tiles";
+
+        const stickAllBtn = document.createElement("button");
+        stickAllBtn.type = "button";
+        stickAllBtn.className = "demo-pill danger";
+        stickAllBtn.textContent = "Stick it (Trigger Error)";
+
+        actionGroup.appendChild(playAllBtn);
+        actionGroup.appendChild(stickAllBtn);
+
+        sliderBar.appendChild(sliderGroup);
+        sliderBar.appendChild(actionGroup);
+        appRoot.appendChild(sliderBar);
+
+        // 6-State Labeled Grid
+        const grid = document.createElement("div");
+        grid.className = "demo-grid";
+        appRoot.appendChild(grid);
+
+        const sixStates = [
+          { id: "idle", label: "1. idle" },
+          { id: "working, crediting", label: "2. working, crediting" },
+          { id: "working, winding", label: "3. working, winding" },
+          { id: "working, dropping", label: "4. working, dropping" },
+          { id: "done", label: "5. done" },
+          { id: "error", label: "6. error (stuck item)" }
+        ];
+
+        const tileControllers = [];
+
+        sixStates.forEach((st) => {
+          const tile = document.createElement("div");
+          tile.className = "demo-tile";
+
+          const head = document.createElement("div");
+          head.className = "demo-tile-head";
+
+          const titleSpan = document.createElement("span");
+          titleSpan.textContent = st.label;
+
+          const stateBtn = document.createElement("button");
+          stateBtn.type = "button";
+          stateBtn.className = "demo-pill";
+          stateBtn.textContent = `setState("${st.id}")`;
+
+          head.appendChild(titleSpan);
+          head.appendChild(stateBtn);
+          tile.appendChild(head);
+
+          const mountNode = document.createElement("div");
+          mountNode.style.width = "100%";
+          mountNode.style.display = "flex";
+          mountNode.style.justifyContent = "center";
+          tile.appendChild(mountNode);
+
+          const inst = mountMachine(mountNode, {
+            machine: "vending",
+            itemName: "Trail Mix",
+            slot: "B2",
+            price: 1.75,
+            credit: 2.50
+          });
+          inst.setState(st.id);
+
+          stateBtn.addEventListener("click", () => {
+            inst.setState(st.id);
+          });
+
+          activeInstances.push(inst);
+          tileControllers.push({ inst, defaultState: st.id });
+          grid.appendChild(tile);
+        });
+
+        // Wire slider to drive all tiles simultaneously
+        rangeInput.addEventListener("input", (e) => {
+          const v = parseFloat(e.target.value);
+          sliderVal.textContent = v.toFixed(2);
+          tileControllers.forEach(({ inst }) => inst.setProgress(v));
+        });
+
+        playAllBtn.addEventListener("click", () => {
+          tileControllers.forEach(({ inst }) => inst.play());
+        });
+
+        stickAllBtn.addEventListener("click", () => {
+          tileControllers.forEach(({ inst }) => inst.setState("error"));
+        });
+      }
+
+      // Check URL for ?demo=1 on load and support instant toggling
+      let isDemoMode = new URLSearchParams(window.location.search).get("demo") === "1";
+
+      function syncMode() {
+        if (isDemoMode) {
+          renderDemoHarness();
+        } else {
+          renderSingleView();
+        }
+      }
+
+      toggleDemoBtn.addEventListener("click", () => {
+        isDemoMode = !isDemoMode;
+        const url = new URL(window.location.href);
+        if (isDemoMode) {
+          url.searchParams.set("demo", "1");
+        } else {
+          url.searchParams.delete("demo");
+        }
+        window.history.replaceState({}, "", url);
+        syncMode();
+      });
+
+      syncMode();
+    })();
+  </script>
+</body>
+</html>
